@@ -1,0 +1,537 @@
+# ============================================================
+# CommitShrink 病症映射表（运行时数据文件 · 单一事实来源）
+# ============================================================
+# 文案即数据：diagnoser.py 只负责查表执行，所有笑点都住在这个文件里。
+# 产品验收标准见 docs/report-sample.md（黄金样张）。
+# v0.2 做英文版时，将 name/diagnosis/prescription/report_copy 等
+# 展示字段拆到 locales/{zh,en}.yaml，检测规则保留在本文件共享。
+#
+# 病症字段说明：
+#   id            机器标识（snake_case）
+#   code          诊断代码（GIT-XX.X，纯属虚构。彩蛋：小数位尽量影射
+#                 ICD-10 编码，如 GIT-42.2 ↔ F42.2 混合性强迫思维和行为；不强求）
+#   name          正式病名（报告中展示）
+#   detectability full = 仅凭 git log 可检测；partial = 需额外数据源（注明降级方案）
+#   trigger       触发规则。type 取值：
+#                   message_regex — 按单条 message 匹配，按周期聚合计数
+#                   sequence      — 连续提交序列的模式匹配
+#                   time_window   — 基于时间戳的窗口统计
+#                   ratio         — 周期内占比阈值
+#                   diff_stat     — 基于 ±行数 / 文件数
+#                   combo         — 以上组合
+#   severity      严重度分级（I 轻度 / II 中度 / III 重度 / IV 极重度）
+#   diagnosis     诊断语模板。占位符：{n} {duration} {ratio} {evidence} {time}
+#                 {lines} {peak} {night_mood} 及 diagnosis_notes 类条件占位符
+#                 （{recursive_note} {night_mood_note}——未触发时替换为空字符串）
+#   diagnosis_alt 部分病症的分支模板（触发分支不同时文案不同）
+#   prescription  处方语（报告第五版块从确诊病症中抽取）
+# ============================================================
+
+meta:
+  severity_labels: {I: 轻度, II: 中度, III: 重度, IV: 极重度}   # IV 即临床显著档
+  regex_flags: IGNORECASE     # 所有 pattern 默认忽略大小写
+  uppercase_rule: 所有"全大写"判定不走正则，用 message.isupper() 对原始文本单独检查
+  grading_rule: 同一病症多档判据同时满足时，取最高档
+  ranking: >-
+    诊断分层：第一遍完成全部单项病症判定；第二遍评估交叉引用档位
+    （GIT-13.0 IV 依赖 GIT-42.2 的链判定；GIT-70.7 IV 为单条提交
+    同时命中 GIT-99.0 触发条件——深夜生产事故中乞求超自然力量）。
+    确诊病症按（严重度, 证据提交数）降序排列：第 1 条为主诊断，
+    第 2–3 条为次诊断，其余列入"其他临床关注状况"。
+  norms_disclaimer: >-
+    常模来源：本中心虚构常模数据库（n = 10,000 名虚构开发者）。
+    虚构样本的分布经过精心设计，以确保您总有可以努力的空间。
+
+# ------------------------------------------------------------
+# 量化指标（报告第二版块）
+# norm 为虚构常模分布参数，百分位 = 正态 CDF 查值；
+# 参数与样张（7.8→94%、31%→89%、−0.34→81%、4.2→96%、38%→77%）互推一致。
+# ------------------------------------------------------------
+metrics:
+  - id: night_despair_index
+    name: 深夜绝望指数
+    scale: 0–10
+    formula: >-
+      10 × (0.6 × min(1, 深夜提交占比 / 0.4) + 0.4 × max(0, −深夜情绪均值))；
+      深夜 = 00:00–05:59。深夜提交数 = 0 时指数记 0.0，报告输出 healthy_copy 变体。
+    reference: "< 3.0"
+    norm: {dist: normal, mean: 3.5, sd: 2.8, direction: higher_is_worse}
+  - id: boundary_integrity
+    name: 工作生活边界完整度
+    scale: 0–100%
+    formula: >-
+      100% − min(100%, 周末提交 ×1.0 + 工作日 22:00 后提交 ×0.7 的加权占比)，
+      结果 clamp 至 [0, 100%]。
+      # 法定节假日加权（×1.5）为 v0.2 可选增强，需内置节假日日历数据源
+    reference: "> 70%"
+    norm: {dist: normal, mean: 55, sd: 19.5, direction: lower_is_worse}   # sd 19.5 使样张 31% → 89 百分位精确复现
+  - id: emotional_baseline
+    name: 情绪基线
+    scale: −1 ~ +1
+    formula: 全部 message 的 VADER compound 均值（中文词条与校正项见 lexicon_patch）
+    reference: "≥ 0"
+    norm: {dist: normal, mean: 0.0, sd: 0.39, direction: lower_is_worse}
+  - id: fix_loop_density
+    name: 修复循环密度
+    scale: 次/议题
+    formula: fix 类提交数 ÷ 议题数；议题切分：相邻 fix 类提交间隔 ≥2h 即切分新议题
+    reference: "≤ 2.0"
+    norm: {dist: normal, mean: 1.8, sd: 1.4, direction: higher_is_worse}
+  - id: alexithymia_index
+    name: 提交述情指数
+    scale: 0–100%
+    formula: 低信息量 message 占比（归一化与停用词表见 GIT-11.2）
+    reference: "< 15%"
+    norm: {dist: normal, mean: 20, sd: 24, direction: higher_is_worse}
+  - id: composite_score
+    name: 心理健康综合评分
+    scale: 0–100
+    formula: >-
+      指标基础分 base = 100 × (1 − Σ wᵢ·badᵢ)。
+      bad_绝望 = 指数/10；bad_边界 = 1 − 完整度；bad_情绪 = max(0, −情绪基线)；
+      bad_循环 = min(1, max(0, (密度 − 2) / 6))；bad_述情 = 述情指数（比例值）。
+      权重 w：绝望 0.3 / 边界 0.2 / 情绪 0.2 / 循环 0.2 / 述情 0.1。
+      确诊负担 burden = Σ 病症严重度权重（I=1 / II=2 / III=4 / IV=6），封顶 35。
+      score = max(0, base − burden)——指标再漂亮，确诊单不会说谎。
+      样张验证：base ≈ 45（0.78/0.69/0.34/0.367/0.38），burden = 11（IV+II+II+I）→ 34。
+    reference: ≥ 70（本中心尚未观测到该区间的真实样本）
+
+# ------------------------------------------------------------
+# 病症总表（报告第一、三版块）
+# ------------------------------------------------------------
+symptoms:
+
+  - id: repeated_fix_loop
+    code: GIT-42.2
+    name: 强迫性修复障碍
+    detectability: full
+    trigger:
+      type: sequence
+      rule: >-
+        相邻间隔 <2h 且改动文件集合有重叠的连续提交构成一个"段"
+        （相邻提交文件集合无交集 = 主题切换，段终止）；
+        段内 fix 类命中 ≥3 次即成链。链长 {n} 与 {duration} 按整段计
+        （允许穿插未命中 fix 的提交，如 "PLEASE WORK"）。
+      pattern: '\b(fix(e[sd]|up)?|hotfix)\b|修复|修好|修正'
+      escalation_markers: [again, really, actually, truly, finally, please, 真的, 这次, 再, 求]
+    severity:
+      I: 链长 3
+      II: 链长 4
+      III: 链长 ≥ 5，或链中出现全大写 message
+      IV: 链长 ≥ 5 且整链位于 00:00–05:59
+    diagnosis: >-
+      受检者在 {duration} 内对同一问题实施 {n} 次修复干预，语言模态依次经历
+      陈述、重申、强调、祈祷四个阶段，修复信心呈单调递减。
+    prescription: >-
+      暴露与反应阻止（ERP）：同一问题第 2 次修复失败后，强制离开键盘 15 分钟
+      并饮水 200 ml（反应阻止），随后重读报错信息全文（暴露）——
+      包括您认为"肯定没用"的那几行。
+
+  - id: naming_collapse
+    code: GIT-60.1
+    name: 命名系统性崩溃
+    detectability: full
+    trigger:
+      type: sequence
+      rule: >-
+        同链（沿用 GIT-42.2 的"段"定义）内命中 final 类正则的 message
+        去重后 ≥2 条即确诊；变体数 = 去重后的命中 message 数。
+      pattern: '\bfinal\b|最终|终版|定稿'   # last 因 "remove last item" 类误报移除
+    severity:
+      I: 2 个变体
+      II: 3–4 个变体
+      III: ≥5 个变体，或出现全大写 FINAL
+      IV: '"final" 与数字版本号（v3+）同时在场'
+    diagnosis: >-
+      受检者对"最终"一词的语义信任已经瓦解，被迫引入 {n} 个辅助限定词
+      以维持指称功能。
+    prescription: 建议改用语义中性的版本号。数字会增长，但不会撒谎。
+
+  - id: decision_regret
+    code: GIT-31.0
+    name: 决策后悔综合征
+    detectability: full
+    trigger:
+      type: message_regex
+      rule: >-
+        message 以 Revert 开头，或全文含 git 自动生成的回链
+        "This reverts commit <hash>"（message 全文已在数据契约内）。
+      pattern: '^Revert\b|^回滚|This reverts commit'
+    severity:
+      I: 周期内 1 次
+      II: 2–3 次且占比 ≤ 10%
+      III: ≥4 次，或占比 > 10%
+      IV: 出现 Revert "Revert …"（对后悔本身的后悔）
+    diagnosis: >-
+      周期内检出 {n} 次决策撤回。{recursive_note}
+    diagnosis_notes:
+      recursive_note: 其中包含对既往撤回的再撤回，形成二阶反刍，建议持续观察。
+    prescription: merge 前进行不少于 30 秒的正念呼吸，并默念："CI 是绿的，不代表它是对的。"
+
+  - id: emotional_outburst
+    code: GIT-19.3
+    name: 急性情绪失控发作
+    detectability: full
+    trigger:
+      type: message_regex
+      rule: message 命中情绪爆发词表，或含 ≥3 个连续感叹号/问号；引用时按 boilerplate.evidence_masking 遮蔽
+      pattern: '\b(wtf|ffs|ugh|argh|damn|dammit|f+u+c*k\w*|whyy+)\b|卧槽|我操|傻逼|妈的|气死|烦死|[!！]{3,}|[?？]{3,}'
+      # why+ 改为 whyy+：仅命中拖长音形态，"document why we retry" 不再误诊；
+      # 单独的 "why???" 由 [?？]{3,} 分支覆盖
+    severity:
+      I: 周期内 1–2 次
+      II: 3–5 次
+      III: 6–9 次
+      IV: ≥10 次，或单条 VADER < −0.9
+    diagnosis: >-
+      周期内记录到 {n} 次语言性情绪释放事件，峰值出现于 {time}（"{evidence}"）。
+    prescription: >-
+      commit message 是永久病历。建议将情绪释放转移至不可归档的介质，例如空气。
+
+  - id: p0_incident
+    code: GIT-99.0
+    name: P0 级心理事件
+    detectability: full
+    trigger:
+      type: combo
+      rule: hotfix/紧急类词汇 且 提交时间位于 00:00–05:59
+      pattern: '\b(hotfix|urgent|emergency|prod|production)\b|紧急|线上|生产环境'
+    severity:
+      IV: 一律 IV 级。本病无轻度。
+    diagnosis: >-
+      {time}，受检者于深夜时段处理生产事故（"{evidence}"）。
+      单一事件同时突破时间边界与应激阈值。
+    prescription: 无。本中心对此保持沉默的敬意，并已为您预约优先复诊。
+
+  - id: night_despair
+    code: GIT-23.5
+    name: 深夜绝望倾向
+    detectability: full
+    trigger:
+      type: ratio
+      rule: 00:00–05:59 提交占比 > 15%，或深夜时段情绪均值 < −0.3
+    severity:
+      I: 占比 > 15%，或仅由情绪路径触发（占比 ≤15% 且深夜情绪均值 < −0.3）
+      II: '> 25%'
+      III: '> 35%'
+      IV: '> 50%'
+    diagnosis: >-
+      深夜提交占比 {ratio}。{night_mood_note}现有证据不支持黑暗直接产生缺陷的假说，
+      但支持其参与修复决策的假说。
+    diagnosis_notes:
+      night_mood_note: 深夜情绪均值 {night_mood}，低于日间基线。   # 仅实测成立时拼接
+    prescription: 将 23:00 后的一切架构决策延迟至次日 10:00 复核后执行。
+
+  - id: boundary_dissolution
+    code: GIT-55.4
+    name: 工作生活边界消融
+    detectability: full
+    trigger:
+      type: ratio
+      rule: 周末提交占比 > 20%
+    severity:
+      I: '> 20%'
+      II: '> 30%'
+      III: '> 45%'
+      IV: 周末提交数超过工作日
+    diagnosis: >-
+      周末提交占比 {ratio}。"周末"在受检者的时间体系中已退化为纯粹的日历学概念。
+    prescription: >-
+      建议引入外部约束以恢复边界。本中心不推荐依赖意志力的干预方案——
+      该结论系基于对受检者既往病历（git log）的回顾性队列研究得出。
+
+  - id: anxious_committing
+    code: GIT-47.1
+    name: 焦虑性提交倾向
+    detectability: full
+    trigger:
+      type: time_window
+      rule: >-
+        滑动 30 分钟窗口检出 ≥5 次提交；重叠窗口贪心合并为一次"发作"。
+        {n} = 合并后发作数，{peak} = 单次发作内任意 30 分钟的最大提交数；
+        周期内 ≥2 次发作确诊。
+    severity:
+      I: 2 次发作
+      II: 3–4 次发作
+      III: ≥5 次发作
+      IV: 单次发作 {peak} ≥ 10
+    diagnosis: >-
+      检出 {n} 次高频提交发作（峰值 {peak} 次/30 分钟）。
+      碎片化保存行为提示对丢失工作成果的病理性恐惧。
+    prescription: >-
+      您的工作成果不会消失——这是 git 唯一被设计来解决的问题。
+      建议将对丢失的恐惧转交给它，作为一次受监督的信任练习。
+
+  - id: history_revisionism
+    code: GIT-88.8
+    name: 历史修正主义
+    detectability: partial   # 需 reflog（仅本地仓库）；缺失时输出 boilerplate.missing_data_copy
+    trigger:
+      type: combo
+      rule: >-
+        reflog 中检出 amend 与 rebase（rebase 按会话计数，不按被改写的提交数计）。
+        force-push 需远端 reflog，v0.1 不检测。fallback 正则仅作提示，不确诊。
+      fallback_pattern: '\b(rebase|squash|amend)\b'
+    severity:
+      I: 1–2 次
+      II: 3–5 次
+      III: ≥6 次
+      IV: 周期内改写行为 ≥10 次   # "是否已 push 共享分支"需 remote-tracking 历史，v0.1 不评估
+    diagnosis: >-
+      检出 {n} 次历史改写行为。受检者试图通过修改过去来处理当下——
+      这在心理学与版本控制中被一致认为是危险的。
+    prescription: 过去无法被修复，只能被 merge。
+
+  - id: alexithymia
+    code: GIT-11.2
+    name: 提交述情障碍
+    detectability: full
+    trigger:
+      type: ratio
+      rule: >-
+        message 归一化（lower + strip + 剥离结尾标点）后命中停用词表，
+        或长度 < 4 字符，记为低信息量样本；按周期占比确诊。
+      stoplist: [".", "..", update, updates, fix, wip, test, tmp, temp, asdf, misc, stuff, changes, 改, 更新, 提交, "1"]
+    severity:
+      I: 占比 > 15%
+      II: '> 25%'
+      III: '> 40%'
+      IV: '> 60%'
+    diagnosis: >-
+      {ratio} 的提交信息无法传达任何语义内容。
+      受检者保留了提交的动作，但丧失了描述它的语言。
+    prescription: >-
+      每日完成一次完整句提交练习（主语可省略，谓语和宾语不可以）。
+      从 "fix" 到 "fix: 登录超时未处理时区偏移"，本中心相信您可以做到。
+
+  - id: binge_committing
+    code: GIT-36.6
+    name: 暴发性提交（静默—倾泻型）
+    detectability: full
+    trigger:
+      type: diff_stat
+      rule: >-
+        单次提交 files_changed ≥ 20 或 insertions ≥ 1000，且此前 ≥72h 无本人提交。
+        排除 merge 提交（parents ≥ 2）；周期首条提交的静默期判定
+        依赖扩窗抓取的周期前最后一条提交（见数据契约）。
+    severity:
+      I: 20–39 个文件，或 1000–1999 行
+      II: 40–79 个文件，或 2000–2999 行
+      III: ≥80 个文件，或 ≥3000 行
+      IV: 以上任一且 message 为 "update"
+    diagnosis: >-
+      静默 {duration} 后单次倾泻 {n} 个文件的改动。
+      本中心尚未观测到能够一次完整 review 该规模改动的人类样本。
+    prescription: >-
+      建议小步提交。一次 commit 的理想大小，是您敢在 message 里如实描述它的大小。
+
+  - id: commitment_avoidance
+    code: GIT-50.0
+    name: 承诺回避障碍
+    detectability: full
+    trigger:
+      type: ratio
+      rule: WIP 类提交占比 > 15%，或存在由连续 ≥3 条 WIP 提交组成的链
+      pattern: '\bwip\b'
+    severity:
+      I: 占比 > 15%，或链长 3
+      II: '> 25%，或链长 4'
+      III: '> 40%'
+      IV: WIP 链长 ≥ 5
+    diagnosis: >-
+      周期内 {ratio} 的提交被标记为 WIP。受检者以"进行中"状态回避对代码的最终承诺。
+      词源学注记：commit 的本义即"承诺"。
+    prescription: >-
+      每个 WIP 须在 24 小时内获得正式命名；逾期未命名者，
+      转入 GIT-11.2（提交述情障碍）合并统计。
+
+  - id: magical_thinking
+    code: GIT-70.7
+    name: 魔法思维
+    detectability: full
+    trigger:
+      type: message_regex
+      pattern: '\b(should work|might work|hopefully|maybe this|fingers crossed)\b|试试|应该(可以|行|没问题|好了)|保佑|玄学|求你'
+    severity:
+      I: 1 次
+      II: 2–3 次
+      III: ≥4 次
+      IV: 与 GIT-99.0 同时在场（深夜生产事故中乞求超自然力量）
+    diagnosis: >-
+      检出 {n} 次因果关系让渡，代表样本："{evidence}"。
+      受检者将确定性外包给了超自然力量，而 CI 不接受这种依赖注入。
+    prescription: >-
+      在输入 "should work" 之前运行一次测试，可将该短语的准确率
+      从玄学水平提升至统计学水平。
+
+  - id: stockholm_techdebt
+    code: GIT-77.7
+    name: 技术债依恋综合征
+    detectability: full
+    trigger:
+      type: message_regex
+      pattern: '\b(workaround|temporar\w+|hack|quick ?fix|for now)\b|临时|先这样|回头再|以后再|待优化'
+    severity:
+      I: 1–2 处
+      II: 3–5 处
+      III: ≥6 处
+      IV: 同一命中文案（归一化后相同 message）间隔 ≥90 天再次出现   # 需跨周期缓存，v0.2；v0.1 封顶 III 级
+    diagnosis: >-
+      检出 {n} 处"临时"方案。本中心对既往"临时"方案的生存分析显示：
+      中位生存期未达到（随访期内无一例结案）。
+      受检者已与技术债建立长期依恋关系，并开始为其辩护。
+    prescription: 每个"先这样"须附带 issue 编号。否则它不是技术债，是技术遗产。
+
+  - id: time_perception
+    code: GIT-13.0
+    name: 时间感知障碍
+    detectability: full
+    trigger:
+      type: combo
+      rule: >-
+        message 命中"简单/快速"类词汇，且（该提交 ±行数 > 300 → 用 diagnosis，
+        或其后 24h 内跟随 ≥2 次 fix 类提交 → 用 diagnosis_alt）。
+        周期末尾提交的"后 24h"依赖扩窗抓取（见数据契约）。
+      pattern: '\b(quick|simple|easy|trivial|small)\b|小改|简单|顺手'   # minor 因 "bump minor version" 误报移除
+    severity:
+      I: 1 次
+      II: 2–3 次
+      III: ≥4 次
+      IV: '"quick fix" 触发了 GIT-42.2 修复链'
+    diagnosis: >-
+      受检者将一次 {lines} 行的改动描述为"{evidence}"。
+      其对"简单"的主观估计与客观复杂度存在系统性偏差；偏差方向稳定，可用于校准。
+    diagnosis_alt: >-
+      受检者将该改动描述为"{evidence}"，随后 24 小时内为其实施了 {n} 次修复干预。
+    prescription: >-
+      下次估算时将直觉值乘以 3。该系数系本中心对受检者历史数据回归所得
+      （95% 置信区间不含 1），属个体化参数，请勿与他人共用。
+
+# ------------------------------------------------------------
+# 情感词典补丁（VADER 为英文单词词典：中文 message 整条被视为
+# 单一 token 打成中性，英文短语也不在词典内，均需补丁）
+# ------------------------------------------------------------
+lexicon_patch:
+  note: >-
+    权重为 −1 ~ +1 的初稿拍脑袋值，Day 1 用真实语料校准。
+    计分优先级：全大写绝望校正最高，命中时对 VADER 原始分施加偏移并跳过其余词条
+    （低信息量样本除外——"WIP" 是缩写惯例，不是呐喊）；
+    否则词条对 message 做子串扫描（不走 VADER 分词），多词条命中取均值，
+    再与 VADER 英文分按中英字符占比加权合成；短语词条优先于 VADER 单词计分。
+  uppercase_despair_offset: -1.19   # 全大写 message 施加绝望校正偏移（VADER 会把礼貌词 please 打成正分，
+                                    # 本中心认为它没有见过凌晨三点的 "please"）。初稿经验值，Day 1 校准
+  entries:
+    please work: -0.6
+    why is this happening: -0.7
+    卧槽: -0.5      # 语境双极词，保守取负
+    我操: -0.6
+    傻逼: -0.8
+    妈的: -0.6
+    崩了: -0.7
+    炸了: -0.6
+    气死: -0.7
+    烦: -0.4
+    绝望: -0.9
+    救命: -0.7
+    玄学: -0.4
+    又: -0.2        # 高危词条：子串匹配会误伤"又快又稳"。但单字负权重本身
+                    # 是"文案即数据"的极致体现，Day 1 校准时再裁决去留
+    终于: 0.6
+    搞定: 0.7
+    跑通: 0.6
+    能跑了: 0.5
+    完美: 0.8
+    舒服: 0.6
+    干净: 0.4
+
+# ------------------------------------------------------------
+# 固定文案（报告骨架用）
+# ------------------------------------------------------------
+boilerplate:
+  disclaimer: >-
+    本报告由自动化系统基于 git log 生成，不构成医疗建议，但可能构成 code review 建议。
+    报告中全部"病症"均为对量化评估文体的戏仿；个别病名系临床术语向 git 领域的移植——
+    本报告的评估对象是提交历史，而非任何人本身，不指涉任何真实精神疾病或其患者。
+    如本报告令您感到被冒犯，请注意：全部临床证据均由您本人于案发时间亲自签名提交。
+    本报告仅对本评估周期内的送检样本负责；样本以外的行为（含经 force-push 销毁的证据）
+    不在负责范围之内。本中心仅受理本人自愿送检的样本；代同事送检所得的一切诊断均属无效，
+    且该行为本身已构成一种本中心尚未编码的病症。
+  evidence_masking: >-
+    引用样本中命中 GIT-19.3 词表的词保留首字、其余以 × 遮蔽，
+    引文后附注"（样本已按本中心伦理规范部分遮蔽）"。
+    纯标点爆发样本（如连续感叹号）不含语义内容，保留原文展示。
+  footer: 复诊安排：下次 git push 后自动进行。｜ 主治系统 CommitShrink v0.1
+  qa_note: 本报告已通过双人复核（本系统与本系统的一个副本）。
+  healthy_copy: 未检出。本中心对此表示罕见的欣慰。
+  missing_data_copy: 未检出（受检者拒绝提供该项样本）。
+
+# ------------------------------------------------------------
+# 报告渲染文案（report.py 从这里取全部固定字符串，代码零中文字面量。
+# v0.2 i18n 时本块整体迁入 locales/zh.yaml）
+# ------------------------------------------------------------
+report_copy:
+  center_name: CommitShrink™ 开发者心理健康评估中心
+  report_title_fmt: 周期性心理状态评估报告 · 第 {week} 评估周
+  header_labels:
+    patient: 受检者
+    period: 评估周期
+    sample: 有效样本
+    method: 施测方式
+    instrument: 评估工具
+    report_date: 报告日期
+    report_no: 报告编号
+  header_values:
+    method: 非侵入式自然行为观察（受检者在数据产生期间对评估不知情；社会赞许性偏差 = 0，霍桑效应 = 0）
+    instrument: CommitShrink v0.1 · 已通过跨文化信效度检验（n = 1）· 重测信度 r = 1.00
+    report_date_suffix: （系统自动生成，无主试效应）
+    report_no_fmt: "CS-{year}-W{week:02d}-0001"
+    sample_fmt: "{n} 次提交（无剔除；其中 {low_info} 条低信息量样本已计入述情统计）"
+  sections:
+    diagnosis: 一、总体诊断
+    metrics: 二、量化指标
+    records: 三、病症发作记录（临床证据节选）
+    ekg: 四、情绪心电图
+    prescriptions: 五、处方建议
+    disclaimer: 六、免责声明与复诊安排
+  diagnosis_labels:
+    chief_complaint: 主诉
+    chief_complaint_text: 无。受检者未报告任何主观不适，亦无求助行为；样本系本系统主动采集。
+    primary: 主诊断
+    secondary: 次诊断
+    other: 其他临床关注状况
+    none_confirmed: 本周期未检出任何病症。本中心对此表示罕见的欣慰，并建议复查。
+    severity_fmt: "（{label}）"
+    composite_fmt: "本周期心理健康综合评分：{score} / 100"
+    impression: 临床印象
+    impression_fmt: "受检者本周期共提交 {n} 次，其中 {night} 次发生于 00:00–05:59。{allcaps_note}"
+    allcaps_note_fmt: "全部 {u} 次全大写提交均发生于深夜时段。"
+  metrics_labels:
+    headers: [指标, 本期, 上期, 参考区间, 常模百分位]
+    no_history: —
+    first_assessment_note: 首次评估，无历史对照。
+    percentile_above: "高于 {pct}% 同类样本"
+    percentile_below: "低于 {pct}% 同类样本"
+  records_labels:
+    record_fmt: "记录 {i} ｜ {code} {name} · 严重度 {sev}（{sev_label}）"
+    time_span: 发作时段
+    interpretation: 临床解读
+    masking_note: （样本已按本中心伦理规范部分遮蔽）
+  ekg_labels:
+    trough_fmt: "情绪最低点：{time}（\"{evidence}\"，校正后情绪分 {score}）"
+  prescriptions_labels:
+    social_support: 【社会支持】建议向橡胶鸭复述问题。本中心研究（未发表，n = 1）显示，其疗效不劣于向同事复述，且不产生人情债务。
+    referral: 【转介说明】本中心无处方权。咖啡因摄入不属于本报告管辖范围，属于您与您的心内科医生之间的事务。
+  footer_labels:
+    followup: 复诊安排
+    followup_value: 下次 git push 后自动进行。
+    qa: 质量控制
+    attending: 主治系统
+    attending_value: CommitShrink v0.1 ｜ 执业编号 sha256:c0ffee…
+  units:
+    minutes: "{v} 分钟"
+    hours: "{v} 小时"
+    days: "{v} 天"
+    at_least_hours: "≥ {v} 小时"
+  errors:
+    no_commits: 样本量为 0。本中心无法对不存在的行为作出诊断，但愿意为这种克制预约一次表彰性随访。
+    not_a_repo: 该路径不是 git 仓库。本中心仅受理版本控制下的行为样本。
