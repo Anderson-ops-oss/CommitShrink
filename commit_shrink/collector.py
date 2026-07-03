@@ -34,7 +34,9 @@ GIT_WINDOW_SLACK = timedelta(days=30)
 
 _NUMSTAT_RE = re.compile(r"^(\d+|-)\t(\d+|-)\t(.+)$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
-_RENAME_BRACES_RE = re.compile(r"\{[^{}]*? => ([^{}]*?)\}")
+_RENAME_BRACES_RE = re.compile(
+    r"^(?P<prefix>.*?)\{(?P<old>[^{}]*?) => (?P<new>[^{}]*?)\}(?P<suffix>.*)$"
+)
 _UNBORN_MARKERS = ("does not have any commits yet", "bad default revision")
 _NOT_REPO_MARKERS = ("not a git repository", "cannot change to", "no such file or directory")
 
@@ -49,7 +51,7 @@ def _run_git(repo: Path, args: list[str]) -> str:
         capture_output=True,
         text=True,
     )
-    if proc.returncode != 0:
+    if proc.returncode != 0: # ran failed
         stderr = proc.stderr.lower()
         if any(marker in stderr for marker in _NOT_REPO_MARKERS):
             raise NotARepoError(str(repo))
@@ -58,16 +60,26 @@ def _run_git(repo: Path, args: list[str]) -> str:
 
 
 def _normalize_path(path: str) -> str:
-    """Resolve numstat rename syntax to the post-rename path.
+    """Resolve numstat rename syntax to the post-rename path."""
+    return _parse_numstat_path(path)[0]
 
-    'src/{old.py => new.py}' -> 'src/new.py'; 'a.txt => b.txt' -> 'b.txt'.
-    Keeps segment-overlap detection alive across renames.
+def _parse_numstat_path(path: str) -> tuple[str, tuple[str, str] | None]:
+    """Return (display_path, rename_pair) for a git numstat path.
+
+    `file_paths` should keep the post-rename path for counts/reporting, while
+    `renames` preserves both identities for topic-overlap detection.
     """
     if "=>" not in path:
-        return path
-    if "{" in path:
-        return _RENAME_BRACES_RE.sub(r"\1", path).replace("//", "/")
-    return path.split(" => ")[-1]
+        return path, None
+    brace_match = _RENAME_BRACES_RE.match(path)
+    if brace_match:
+        prefix = brace_match.group("prefix")
+        suffix = brace_match.group("suffix")
+        old_path = f"{prefix}{brace_match.group('old')}{suffix}".replace("//", "/")
+        new_path = f"{prefix}{brace_match.group('new')}{suffix}".replace("//", "/")
+        return new_path, (old_path, new_path)
+    old_path, new_path = path.split(" => ", 1)
+    return new_path, (old_path, new_path)
 
 
 def collect(
@@ -113,13 +125,17 @@ def collect(
         tail = parts[-1]  # numstat block; FIELD_SEP in the body cannot reach it
         body = FIELD_SEP.join(parts[5:-1])
         file_paths: list[str] = []
+        renames: list[tuple[str, str]] = []
         insertions = deletions = 0
         for line in tail.splitlines():
             m = _NUMSTAT_RE.match(line.strip("\n"))
             if not m:
                 continue
             ins, dels, path = m.groups()
-            file_paths.append(_normalize_path(path))
+            normalized_path, rename = _parse_numstat_path(path)
+            file_paths.append(normalized_path)
+            if rename:
+                renames.append(rename)
             insertions += 0 if ins == "-" else int(ins)
             deletions += 0 if dels == "-" else int(dels)
         commits.append(
@@ -131,6 +147,7 @@ def collect(
                 message=body.strip("\n"),
                 parents=parents_raw.split(),
                 file_paths=file_paths,
+                renames=renames,
                 insertions=insertions,
                 deletions=deletions,
             )

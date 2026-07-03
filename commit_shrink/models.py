@@ -19,6 +19,7 @@ class Commit:
     message: str  # full raw message body
     parents: list[str] = field(default_factory=list)
     file_paths: list[str] = field(default_factory=list)
+    renames: list[tuple[str, str]] = field(default_factory=list)
     insertions: int = 0
     deletions: int = 0
 

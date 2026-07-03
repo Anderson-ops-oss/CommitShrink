@@ -7,3 +7,6 @@ dist/
 build/
 fixture-repo/
 .venv.nosync/
+
+bug_need_fix.md
+plan-commit-shrink.md

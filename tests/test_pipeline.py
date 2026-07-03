@@ -6,7 +6,9 @@ symptoms.yaml; docstrings reference the trigger being exercised.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from datetime import datetime, timedelta
 
 import pytest
 from rich.console import Console
@@ -168,6 +170,54 @@ class TestWindowAndEdges:
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
         with pytest.raises(NoCommitsError):
             assess_repo(repo, days=7)
+
+    def test_rename_preserves_topic_continuity(self, tmp_path):
+        """A fix chain should survive old.py -> new.py renames."""
+        repo = tmp_path / "rename-chain"
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "user.name", "t"], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "user.email", "t@t.t"], check=True
+        )
+
+        base = datetime.now().astimezone().replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )
+
+        def commit(
+            message: str, minutes: int, path: str | None = None, content: str = ""
+        ) -> None:
+            when = (base + timedelta(minutes=minutes)).isoformat()
+            if path:
+                target = repo / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content)
+                subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+            env = {**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+            subprocess.run(
+                ["git", "-C", str(repo), "commit", "-m", message],
+                check=True,
+                capture_output=True,
+                env=env,
+            )
+
+        commit("fix login bug", 0, "login.py", "v1\n")
+        commit("fix login bug again", 10, "login.py", "v2\n")
+        subprocess.run(["git", "-C", str(repo), "mv", "login.py", "auth.py"], check=True)
+        commit("rename login to auth", 20)
+        commit("fix auth bug", 30, "auth.py", "v3\n")
+
+        assessment = assess_repo(repo, days=1, until=base + timedelta(hours=1))
+        diagnosis = by_id(assessment, "repeated_fix_loop")
+        assert diagnosis is not None
+        assert [c.subject for c in diagnosis.evidence] == [
+            "fix login bug",
+            "fix login bug again",
+            "rename login to auth",
+            "fix auth bug",
+        ]
 
 
 class TestReport:

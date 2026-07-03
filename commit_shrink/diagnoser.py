@@ -55,6 +55,14 @@ def _fmt_time(commit: Commit) -> str:
     return commit.ts.strftime("%m-%d %H:%M")
 
 
+def _topic_paths(commit: Commit) -> set[str]:
+    paths = set(commit.file_paths)
+    for old_path, new_path in commit.renames:
+        paths.add(old_path)
+        paths.add(new_path)
+    return paths
+
+
 class Diagnoser:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -118,7 +126,7 @@ class Diagnoser:
             if current:
                 prev = current[-1]
                 gap_ok = (c.ts - prev.ts) < SEGMENT_GAP  # yaml: "相邻间隔 <2h"
-                overlap = bool(set(prev.file_paths) & set(c.file_paths))
+                overlap = bool(_topic_paths(prev) & _topic_paths(c))
                 if gap_ok and overlap:
                     current.append(c)
                     continue
