@@ -539,3 +539,5 @@ report_copy:
   errors:
     no_commits: 样本量为 0。本中心无法对不存在的行为作出诊断，但愿意为这种克制预约一次表彰性随访。
     not_a_repo: 该路径不是 git 仓库。本中心仅受理版本控制下的行为样本。
+    clone_failed: "远程样本采集失败：{error}。本中心的取样范围受限于网络连接与仓库可访问性，这不属于受检者的责任。"
+    author_required_for_remote: 评估他人仓库时必须指定受检对象（author），本中心不代为猜测样本归属。

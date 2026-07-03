@@ -35,6 +35,19 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def compute_window(days: int, until: datetime | None) -> tuple[datetime, datetime]:
+    """Calendar-day assessment window: days=7 ending Sunday covers Monday
+    00:00 .. Sunday, matching the golden sample's Mon-Sun week view (not an
+    8-day span). Exposed so remote.py can size a shallow clone to the same
+    window assess_repo() will filter to, without duplicating this logic.
+    """
+    end = until or datetime.now().astimezone()
+    if end.tzinfo is None:
+        end = end.astimezone()
+    start = datetime.combine(end.date() - timedelta(days=days - 1), time.min, tzinfo=end.tzinfo)
+    return start, end
+
+
 @dataclass
 class Assessment:
     patient_name: str
@@ -59,14 +72,7 @@ def assess_repo(
     cfg: dict | None = None,
 ) -> Assessment:
     cfg = cfg or load_config()
-    end = until or datetime.now().astimezone()
-    if end.tzinfo is None:
-        end = end.astimezone()
-    # Calendar-day window: days=7 ending Sunday covers Monday 00:00 .. Sunday,
-    # matching the golden sample's Mon-Sun week view (not an 8-day span).
-    start = datetime.combine(
-        end.date() - timedelta(days=days - 1), time.min, tzinfo=end.tzinfo
-    )
+    start, end = compute_window(days, until)
 
     window = collect(repo, since=start - FETCH_PADDING, until=end + FETCH_PADDING, author=author)
     period = [c for c in window if start <= c.ts <= end]

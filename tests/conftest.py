@@ -22,12 +22,22 @@ def _load_fixture_builder():
 
 
 @pytest.fixture(scope="session")
-def assessment(tmp_path_factory):
+def fixture_repo(tmp_path_factory):
+    """The raw demo repo (not yet run through assess_repo) plus its window,
+    for tests that need the filesystem path itself (e.g. cloning it via
+    file://) rather than a computed Assessment.
+    """
+    builder = _load_fixture_builder()
+    repo = tmp_path_factory.mktemp("fixture-raw") / "demo-repo"
+    start, period_end = builder.build_fixture(repo)
+    return repo, start, period_end
+
+
+@pytest.fixture(scope="session")
+def assessment(fixture_repo):
     from commit_shrink.pipeline import assess_repo
 
-    builder = _load_fixture_builder()
-    repo = tmp_path_factory.mktemp("fixture") / "demo-repo"
-    _, period_end = builder.build_fixture(repo)
+    repo, _start, period_end = fixture_repo
     return assess_repo(repo, days=7, until=period_end)
 
 

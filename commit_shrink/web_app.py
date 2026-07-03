@@ -18,14 +18,21 @@ Uses absolute imports (not the package's usual relative style) because
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
 
+from commit_shrink import history
 from commit_shrink.analyzer import collapse_cjk_whitespace
 from commit_shrink.collector import NotARepoError
 from commit_shrink.pipeline import Assessment, NoCommitsError, assess_repo, load_config
+from commit_shrink.remote import (
+    CloneError,
+    RemoteAuthorRequiredError,
+    is_remote_spec,
+    local_repo,
+    require_author_for_remote,
+)
 from commit_shrink.report import MAX_EVIDENCE_LINES, MAX_PRESCRIPTIONS, MAX_RECORDS, ReportRenderer
 
 DISPLAY_METRIC_IDS = [
@@ -290,9 +297,13 @@ st.set_page_config(page_title="CommitShrink", page_icon=":stethoscope:")
 st.title(rc["center_name"])
 
 with st.form("assessment_form"):
-    path_input = st.text_input("Repository path", value=".")
+    path_input = st.text_input(
+        "Repository path, or a public repo URL / github:owner/repo", value="."
+    )
     days_input = st.number_input("Assessment window (days)", min_value=1, value=7, step=1)
-    author_input = st.text_input("Author filter (optional, matches git --author)", value="")
+    author_input = st.text_input(
+        "Author filter (required for a remote repo; matches git --author)", value=""
+    )
     until_input = st.text_input(
         "End of assessment period (optional, ISO datetime; defaults to now)", value=""
     )
@@ -304,23 +315,34 @@ if submitted:
     except ValueError:
         st.error(f"'{until_input}' is not a valid ISO datetime.")
     else:
-        with st.spinner("Reading git log and generating the assessment..."):
-            try:
-                assessment = assess_repo(
-                    Path(path_input),
-                    days=int(days_input),
-                    until=until,
-                    author=author_input.strip() or None,
-                    cfg=cfg,
-                )
-            except NotARepoError:
-                st.error(rc["errors"]["not_a_repo"])
-            except NoCommitsError:
-                st.error(rc["errors"]["no_commits"])
-            except RuntimeError as e:
-                st.error(str(e))
-            else:
-                st.session_state.assessment = assessment
+        author = author_input.strip() or None
+        try:
+            require_author_for_remote(path_input, author)
+        except RemoteAuthorRequiredError:
+            st.error(rc["errors"]["author_required_for_remote"])
+        else:
+            with st.spinner("Reading git log and generating the assessment..."):
+                try:
+                    with local_repo(path_input, days=int(days_input), until=until) as repo_path:
+                        assessment = assess_repo(
+                            repo_path,
+                            days=int(days_input),
+                            until=until,
+                            author=author,
+                            cfg=cfg,
+                        )
+                        source = "remote" if is_remote_spec(path_input) else "local"
+                        history.record_assessment(assessment, [repo_path], source=source)
+                except CloneError as e:
+                    st.error(rc["errors"]["clone_failed"].format(error=str(e)))
+                except NotARepoError:
+                    st.error(rc["errors"]["not_a_repo"])
+                except NoCommitsError:
+                    st.error(rc["errors"]["no_commits"])
+                except RuntimeError as e:
+                    st.error(str(e))
+                else:
+                    st.session_state.assessment = assessment
 
 assessment = st.session_state.assessment
 if assessment is not None:

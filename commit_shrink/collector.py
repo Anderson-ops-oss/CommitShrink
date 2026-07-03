@@ -157,6 +157,37 @@ def collect(
     return commits
 
 
+def remote_origin_url(repo: Path) -> str | None:
+    """The `origin` remote URL, or None if the repo has no remote configured.
+
+    Used by history.py to fingerprint a repo by its remote identity rather
+    than its local path, so the same GitHub repo cloned to two different
+    directories (or cloned fresh into a temp dir for a remote assessment)
+    shares one cross-period history. `git config --get` on a missing key
+    exits non-zero with empty stderr -- not a real error, so this bypasses
+    _run_git's error handling rather than reusing it.
+    """
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "config", "--get", "remote.origin.url"],
+        capture_output=True,
+        text=True,
+    )
+    return proc.stdout.strip() or None
+
+
+def root_commit_shas(repo: Path) -> list[str]:
+    """Every root (parentless) commit reachable from HEAD, sorted for a
+    deterministic fingerprint. Fallback identity for history.py when a repo
+    has no remote configured (a pure-local repo). Empty if the repo has no
+    commits or HEAD cannot be resolved.
+    """
+    try:
+        out = _run_git(repo, ["rev-list", "--max-parents=0", "HEAD"])
+    except (NotARepoError, RuntimeError):
+        return []
+    return sorted(out.split())
+
+
 def count_rewrites(repo: Path, since: datetime, until: datetime) -> int | None:
     """Count history rewrites (amends + rebase sessions) in the HEAD reflog.
 

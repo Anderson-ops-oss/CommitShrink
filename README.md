@@ -87,7 +87,13 @@ commit-shrink path/to/repo                   # assess a specific repository
 commit-shrink . --days 30                    # widen the assessment window
 commit-shrink . --author you@example.com     # assess a specific contributor
 commit-shrink . --until 2026-06-28T23:59:00+08:00
+
+# Assess a public repository without cloning it yourself first:
+commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
+commit-shrink https://github.com/owner/repo --author dev@example.com
 ```
+
+Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone URL) are shallow-cloned into a temporary directory, scoped to roughly the assessment window, and discarded afterward — nothing is left on disk. `--author` is required for a remote repository: without it there's no principled way to guess which contributor you meant to assess, so CommitShrink refuses to just pick whoever committed the most that week.
 
 Want to see it run without risking your own commit history? Generate a clinically rich demo repository and point the tool at it:
 

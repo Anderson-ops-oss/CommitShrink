@@ -85,7 +85,13 @@ commit-shrink path/to/repo                   # 评估指定仓库
 commit-shrink . --days 30                    # 拉长评估周期
 commit-shrink . --author you@example.com     # 指定评估某一位贡献者
 commit-shrink . --until 2026-06-28T23:59:00+08:00
+
+# 评估一个公开仓库，不用自己先手动 clone：
+commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
+commit-shrink https://github.com/owner/repo --author dev@example.com
 ```
+
+远程地址（`github:owner/repo` 简写，或任意 `https://`/`git@` clone 地址）会被浅克隆到一个临时目录，只拉取评估周期附近所需的历史，用完即删，不留痕迹。评估远程仓库时必须指定 `--author`——没有这个参数，工具没有任何合理依据去猜"你想看的是哪位贡献者"，所以干脆拒绝擅自挑一个提交最多的人当受检者。
 
 不想拿自己的提交历史冒险？生成一个"病情丰富"的演示仓库直接体验：
 
