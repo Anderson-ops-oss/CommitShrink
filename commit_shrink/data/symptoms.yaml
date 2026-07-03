@@ -518,6 +518,10 @@ report_copy:
     masking_note: （样本已按本中心伦理规范部分遮蔽）
   ekg_labels:
     trough_fmt: "情绪最低点：{time}（\"{evidence}\"，校正后情绪分 {score}）"
+    x_axis: 时间
+    y_axis: 情绪分
+    legend_commits: 提交
+    legend_trough: 情绪最低点
   prescriptions_labels:
     social_support: 【社会支持】建议向橡胶鸭复述问题。本中心研究（未发表，n = 1）显示，其疗效不劣于向同事复述，且不产生人情债务。
     referral: 【转介说明】本中心无处方权。咖啡因摄入不属于本报告管辖范围，属于您与您的心内科医生之间的事务。

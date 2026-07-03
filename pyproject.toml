@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+web = ["streamlit>=1.38", "plotly>=5.24"]
 
 [project.scripts]
 commit-shrink = "commit_shrink.cli:main"
