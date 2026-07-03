@@ -1,5 +1,9 @@
 # CommitShrink
 
+[![Tests](https://github.com/Anderson-ops-oss/CommitShrink/actions/workflows/tests.yml/badge.svg)](https://github.com/Anderson-ops-oss/CommitShrink/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/github/license/Anderson-ops-oss/CommitShrink)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+
 [English](README.md) | **简体中文**
 
 > 一个一本正经的临床评估工具：读取你的 `git log`，输出一份《开发者心理健康评估报告》——诊断代码、量化指标，以及一条你不会照做的处方建议。

@@ -1,5 +1,9 @@
 # CommitShrink
 
+[![Tests](https://github.com/Anderson-ops-oss/CommitShrink/actions/workflows/tests.yml/badge.svg)](https://github.com/Anderson-ops-oss/CommitShrink/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/github/license/Anderson-ops-oss/CommitShrink)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+
 **English** | [简体中文](README.zh-CN.md)
 
 > A perfectly serious clinical instrument that reads your `git log` and returns a developer mental-health assessment — diagnostic codes, quantitative indicators, and a prescription you will not follow.
