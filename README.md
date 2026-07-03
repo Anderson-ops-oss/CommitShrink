@@ -66,7 +66,7 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 1. **Collector** reads your repository with a single `git log --numstat` pass — no external services, no network calls, nothing leaves your machine.
 2. **Analyzer** scores every commit message's sentiment (VADER plus a hand-tuned bilingual lexicon patch) and computes the six headline metrics.
 3. **Diagnoser** matches your commit patterns against a symptom table — every diagnosis, severity threshold, and prescription lives in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml) as data, not code.
-4. **Report** renders the result as a full clinical write-up (a Streamlit web report is planned).
+4. **Report** renders the result as a full clinical write-up, either to the terminal or as an interactive Streamlit web report.
 
 ## Installation
 
@@ -108,6 +108,15 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 ```
 
 Run the line it prints (the `--until` value depends on today's date) — `commit-shrink fixture-repo --days 7` on its own defaults to *today* as the window's end, which misses most of the demo history.
+
+## Web Interface
+
+Prefer a browser? The same assessment pipeline is also available as a Streamlit app, with an interactive Plotly sentiment chart in place of the terminal's sparkline.
+
+```bash
+pip install -e ".[web]"
+streamlit run commit_shrink/web_app.py
+```
 
 ## A Few Diagnostic Codes
 

@@ -50,6 +50,7 @@ def _run_git(repo: Path, args: list[str]) -> str:
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     if proc.returncode != 0: # ran failed
         stderr = proc.stderr.lower()
@@ -171,6 +172,7 @@ def remote_origin_url(repo: Path) -> str | None:
         ["git", "-C", str(repo), "config", "--get", "remote.origin.url"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return proc.stdout.strip() or None
 

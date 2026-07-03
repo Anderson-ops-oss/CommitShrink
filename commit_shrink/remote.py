@@ -104,7 +104,11 @@ def local_repo(spec: str, days: int, until: datetime | None) -> Iterator[Path]:
         ]
         try:
             proc = subprocess.run(
-                args, capture_output=True, text=True, timeout=CLONE_TIMEOUT_SECONDS
+                args,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=CLONE_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
             raise CloneError(

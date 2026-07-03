@@ -9,6 +9,8 @@ code path a real https:// URL would, with zero network dependency.
 
 from __future__ import annotations
 
+import subprocess
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -130,3 +132,19 @@ class TestLocalRepoContextManager:
         assert _resolve_clone_url("github:torvalds/linux") == "https://github.com/torvalds/linux.git"
         assert _resolve_clone_url("github:a/b.git") == "https://github.com/a/b.git"
         assert _resolve_clone_url("https://gitlab.com/x/y.git") == "https://gitlab.com/x/y.git"
+
+    def test_clone_and_collect_survive_a_non_utf8_default_locale(self, fixture_repo, monkeypatch):
+        """The fixture repo's Friday commit ("修复缓存又崩了 卧槽") is CJK text.
+        Forcing subprocess's text-mode encoding resolution to cp1252 (the
+        typical Windows default) reproduces, on any platform, what a
+        Windows machine hit before local_repo()'s clone and collect() both
+        pinned encoding="utf-8" explicitly: git's UTF-8 output silently
+        failed to decode and calling code crashed on a None stdout.
+        """
+        monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp1252")
+        source_repo, _start, period_end = fixture_repo
+
+        with local_repo(f"file://{source_repo}", days=7, until=period_end) as cloned_path:
+            commits = collect(cloned_path, since=period_end - timedelta(days=7), until=period_end)
+
+        assert any("修复缓存又崩了" in c.message for c in commits)

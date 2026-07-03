@@ -64,7 +64,7 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 1. **Collector** 用一次 `git log --numstat` 读完整个仓库——不调用任何外部服务，数据不出本机。
 2. **Analyzer** 给每条 commit message 打情绪分（VADER + 手工校准的中英双语词典补丁），并算出六项核心指标。
 3. **Diagnoser** 拿提交模式去匹配病症表——每条诊断、严重度阈值、处方语，全部作为数据存在 [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml) 里，不写死在代码里。
-4. **Report** 把结果渲染成一份完整的临床报告（Streamlit 网页版正在计划中）。
+4. **Report** 把结果渲染成一份完整的临床报告——可以是终端输出，也可以是交互式的 Streamlit 网页版。
 
 ## 安装
 
@@ -106,6 +106,15 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 ```
 
 照着它打印出来的那一行执行（`--until` 的值每天都不同）——如果不带 `--until` 直接跑 `commit-shrink fixture-repo --days 7`，评估窗口默认以*今天*结尾，会漏掉演示历史里的大部分提交。
+
+## 网页版
+
+更喜欢浏览器界面？同一套评估流程也提供了 Streamlit 网页版，用交互式 Plotly 情绪图表替代了终端版的字符走势图。
+
+```bash
+pip install -e ".[web]"
+streamlit run commit_shrink/web_app.py
+```
 
 ## 病症速览
 
