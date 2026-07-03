@@ -39,8 +39,59 @@ class ReportRenderer:
         self.sev_labels = self.meta["severity_labels"]
         # Separator between a bold label and its value (U+3000 in zh, ": " in en).
         self.label_sep = self.rc["label_sep"]
+        # Display copy is resolved from the config here (not baked into the
+        # Diagnosis), so the same assessment renders in any language.
+        self.spec = {s["id"]: s for s in cfg["symptoms"]}
+        self.metrics_spec = {m["id"]: m for m in cfg["metrics"]}
+        self.units = self.rc["units"]
 
     # -- helpers -------------------------------------------------------------
+
+    def _fmt_duration(self, td) -> str:
+        """Format a timedelta with the config's (language-specific) unit words.
+        None means "at least the binge silence threshold" (72h)."""
+        if td is None:
+            return self.units["at_least_hours"].format(v=72)
+        minutes = td.total_seconds() / 60
+        if minutes < 120:
+            return self.units["minutes"].format(v=round(minutes))
+        hours = minutes / 60
+        if hours < 48:
+            return self.units["hours"].format(v=f"{hours:.1f}")
+        return self.units["days"].format(v=f"{hours / 24:.1f}")
+
+    def diagnosis_name(self, d: Diagnosis) -> str:
+        return self.spec[d.id]["name"]
+
+    def diagnosis_prescription(self, d: Diagnosis) -> str:
+        return _copy(self.spec[d.id]["prescription"])
+
+    def diagnosis_text(self, d: Diagnosis) -> str:
+        """Render a diagnosis's prose from the config + the result's neutral
+        args/notes. This is where language is applied to detection output."""
+        spec = self.spec[d.id]
+        kwargs = dict(d.args)
+        if "duration_td" in kwargs:
+            kwargs["duration"] = self._fmt_duration(kwargs.pop("duration_td"))
+        for note_key, note_text in spec.get("diagnosis_notes", {}).items():
+            directive = d.notes.get(note_key) or {}
+            kwargs[note_key] = (
+                note_text.format(**directive.get("args", {})) if directive.get("show") else ""
+            )
+        return _copy(spec[d.template_key].format(**kwargs))
+
+    def rendered_notes(self, a: Assessment) -> list[str]:
+        """Free-text 'other concern' lines for symptoms that degraded to a
+        missing-data note (currently only GIT-88.8 when reflog is unavailable)."""
+        lines = []
+        for sid in a.notes:
+            spec = self.spec[sid]
+            lines.append(
+                self.rc["missing_data_note_fmt"].format(
+                    code=spec["code"], name=spec["name"], copy=self.bp["missing_data_copy"]
+                )
+            )
+        return lines
 
     def _percentile_text(self, metric) -> str:
         if metric.percentile is None:
@@ -51,7 +102,7 @@ class ReportRenderer:
 
     def _diagnosis_line(self, d: Diagnosis) -> str:
         sev = self.rc["diagnosis_labels"]["severity_fmt"].format(label=self.sev_labels[d.severity])
-        return f"{d.code} {d.name}{sev}"
+        return f"{d.code} {self.diagnosis_name(d)}{sev}"
 
     def _trend_note(self, trend: Trend) -> str:
         dl = self.rc["diagnosis_labels"]
@@ -110,14 +161,14 @@ class ReportRenderer:
         if not a.diagnoses:
             console.print(dl["none_confirmed"])
             if a.notes:
-                console.print(f"[bold]{dl['other']}[/bold]{self.label_sep}{dl['list_join'].join(a.notes)}")
+                console.print(f"[bold]{dl['other']}[/bold]{self.label_sep}{dl['list_join'].join(self.rendered_notes(a))}")
         else:
             primary, secondary, others = a.diagnoses[0], a.diagnoses[1:3], a.diagnoses[3:]
             console.print(f"[bold]{dl['primary']}[/bold]{self.label_sep}{self._diagnosis_line(primary)}")
             if secondary:
                 joined = dl["secondary_join"].join(self._diagnosis_line(d) for d in secondary)
                 console.print(f"[bold]{dl['secondary']}[/bold]{self.label_sep}{joined}")
-            other_parts = [f"{d.code} {d.name}" for d in others] + a.notes
+            other_parts = [f"{d.code} {self.diagnosis_name(d)}" for d in others] + self.rendered_notes(a)
             if other_parts:
                 console.print(f"[bold]{dl['other']}[/bold]{self.label_sep}{dl['list_join'].join(other_parts)}")
         console.print()
@@ -152,11 +203,18 @@ class ReportRenderer:
         previous = trend.metric_previous if trend else {}
         for mid in display_ids:
             m = a.metrics[mid]
+            spec = self.metrics_spec[mid]
             value = m.display
             if m.healthy:
                 value = f"{m.display}*"
             prev_text = previous.get(mid, ml["no_history"])
-            table.add_row(m.name, f"[bold]{value}[/bold]", prev_text, m.reference, self._percentile_text(m))
+            table.add_row(
+                spec["name"],
+                f"[bold]{value}[/bold]",
+                prev_text,
+                str(spec["reference"]),
+                self._percentile_text(m),
+            )
         console.print(table)
         if not previous:
             console.print(Text(ml["first_assessment_note"], style="dim"))
@@ -170,7 +228,11 @@ class ReportRenderer:
         records = [d for d in a.diagnoses if d.evidence][:MAX_RECORDS]
         for i, d in enumerate(records, start=1):
             title = rl["record_fmt"].format(
-                i=i, code=d.code, name=d.name, sev=d.severity, sev_label=self.sev_labels[d.severity]
+                i=i,
+                code=d.code,
+                name=self.diagnosis_name(d),
+                sev=d.severity,
+                sev_label=self.sev_labels[d.severity],
             )
             console.print(f"[bold]{title}[/bold]")
             first, last = d.evidence[0], d.evidence[-1]
@@ -184,7 +246,9 @@ class ReportRenderer:
                 a.masked_subjects.get(c.sha, c.subject) != c.subject
                 for c in d.evidence[:MAX_EVIDENCE_LINES]
             )
-            interpretation = d.text + (rl["masking_note"] if d.masked or evidence_masked else "")
+            interpretation = self.diagnosis_text(d) + (
+                rl["masking_note"] if d.masked or evidence_masked else ""
+            )
             console.print(f"[dim]{rl['interpretation']}[/dim]{self.label_sep}{interpretation}")
             console.print()
 
@@ -227,7 +291,7 @@ class ReportRenderer:
     def _prescriptions_section(self, console: Console, a: Assessment) -> None:
         pl = self.rc["prescriptions_labels"]
         console.print(Rule(self.rc["sections"]["prescriptions"], align="left"))
-        items = [d.prescription for d in a.diagnoses[:MAX_PRESCRIPTIONS]]
+        items = [self.diagnosis_prescription(d) for d in a.diagnoses[:MAX_PRESCRIPTIONS]]
         items.append(pl["social_support"])
         items.append(pl["referral"])
         for i, item in enumerate(items, start=1):

@@ -69,16 +69,18 @@ class TestEnglishAssessmentRenders:
         repo, _start, period_end = fixture_repo
         cfg = load_config("en")
         a = assess_repo(repo, days=7, until=period_end, cfg=cfg)
+        renderer = ReportRenderer(cfg)
 
-        names = {d.name for d in a.diagnoses}
+        names = {renderer.diagnosis_name(d) for d in a.diagnoses}
         assert "Compulsive Fix Disorder" in names
 
         fixloop = next(d for d in a.diagnoses if d.id == "repeated_fix_loop")
+        text = renderer.diagnosis_text(fixloop)
         # placeholders were filled (no leftover braces) and duration came out English
-        assert "{" not in fixloop.text and "}" not in fixloop.text
-        assert "corrective interventions" in fixloop.text
-        assert "minutes" in fixloop.text or "hours" in fixloop.text
-        assert not _has_cjk(fixloop.text)
+        assert "{" not in text and "}" not in text
+        assert "corrective interventions" in text
+        assert "minutes" in text or "hours" in text
+        assert not _has_cjk(text)
 
     def test_full_english_report_has_no_cjk(self, fixture_repo):
         """Render the whole report to a string buffer and assert it is CJK-free
@@ -122,3 +124,40 @@ class TestEnglishAssessmentRenders:
         ReportRenderer(cfg).render(buf, a)
         text = buf.export_text()
         assert _has_cjk(text)  # the Chinese report is, in fact, Chinese
+
+
+class TestDeferredRendering:
+    """The mechanism the Streamlit language switch relies on: assess once, then
+    render the SAME Assessment in either language with no re-assessment."""
+
+    def _render(self, cfg, a) -> str:
+        buf = Console(file=None, record=True, width=100)
+        ReportRenderer(cfg).render(buf, a)
+        return buf.export_text()
+
+    def test_one_assessment_renders_both_languages(self, fixture_repo):
+        repo, _start, period_end = fixture_repo
+        # Assess ONCE. The result is language-neutral.
+        a = assess_repo(repo, days=7, until=period_end, cfg=load_config("zh"))
+
+        zh = self._render(load_config("zh"), a)
+        en = self._render(load_config("en"), a)
+
+        assert _has_cjk(zh) and "强迫性修复障碍" in zh
+        assert not any(_has_cjk(ch) for ch in en) and "Compulsive Fix Disorder" in en
+
+    def test_assessment_is_language_neutral(self, fixture_repo):
+        """Assessing with the zh vs en config yields identical detection output
+        (ids, severities, and the neutral template args) -- proof that no
+        display language is baked into the Assessment."""
+        repo, _start, period_end = fixture_repo
+        a_zh = assess_repo(repo, days=7, until=period_end, cfg=load_config("zh"))
+        a_en = assess_repo(repo, days=7, until=period_end, cfg=load_config("en"))
+
+        assert [(d.id, d.severity) for d in a_zh.diagnoses] == [
+            (d.id, d.severity) for d in a_en.diagnoses
+        ]
+        for dz, de in zip(a_zh.diagnoses, a_en.diagnoses):
+            assert dz.args == de.args
+            assert dz.notes == de.notes
+        assert a_zh.notes == a_en.notes

@@ -30,12 +30,12 @@ class TestSymptoms:
         assert len(d.evidence) == 5
         assert any(c.message == "PLEASE WORK" for c in d.evidence)
 
-    def test_naming_collapse_grade_ii(self, assessment):
+    def test_naming_collapse_grade_ii(self, assessment, zh_renderer):
         """4 deduped final-variants -> grade II (3-4 variants)."""
         d = by_id(assessment, "naming_collapse")
         assert d is not None
         assert d.severity == "II"
-        assert "4" in d.text
+        assert "4" in zh_renderer.diagnosis_text(d)
 
     def test_decision_regret_grade_iv(self, assessment):
         """Revert of a revert -> second-order rumination, grade IV."""
@@ -160,12 +160,13 @@ class TestMetrics:
         assert assessment.scores[wip.sha] == 0.0
         assert abs(assessment.scores[scream.sha] - (-0.87)) < 0.01
 
-    def test_diagnosis_text_has_no_folded_scalar_gaps(self, assessment):
+    def test_diagnosis_text_has_no_folded_scalar_gaps(self, assessment, zh_renderer):
         """YAML folded scalars insert spaces between CJK chars; they must be
         collapsed ('98 分钟内' not '98 分钟 内')."""
         d = by_id(assessment, "repeated_fix_loop")
-        assert "分钟 内" not in d.text
-        assert "分钟内对同一问题" in d.text
+        text = zh_renderer.diagnosis_text(d)
+        assert "分钟 内" not in text
+        assert "分钟内对同一问题" in text
 
     def test_despair_positive(self, assessment):
         assert assessment.metrics["night_despair_index"].value > 3.0

@@ -41,6 +41,19 @@ def assessment(fixture_repo):
     return assess_repo(repo, days=7, until=period_end)
 
 
+@pytest.fixture(scope="session")
+def zh_renderer():
+    """A Chinese renderer, for tests that assert on rendered diagnosis prose.
+
+    Diagnosis text is no longer baked into the Assessment; it is rendered from
+    the config at display time, so a test needs a renderer to inspect it.
+    """
+    from commit_shrink.pipeline import load_config
+    from commit_shrink.report import ReportRenderer
+
+    return ReportRenderer(load_config("zh"))
+
+
 def by_id(assessment, symptom_id):
     for d in assessment.diagnoses:
         if d.id == symptom_id:

@@ -477,6 +477,7 @@ report_copy:
   center_name: CommitShrink™ 开发者心理健康评估中心
   report_title_fmt: 周期性心理状态评估报告 · 第 {week} 评估周
   label_sep: "　"   # 标签与取值之间的分隔（全角空格）；英文版覆盖为 ": "
+  missing_data_note_fmt: "{code} {name}：{copy}"   # GIT-88.8 缺数据降级行；英文版用半角冒号
   header_labels:
     patient: 受检者
     period: 评估周期

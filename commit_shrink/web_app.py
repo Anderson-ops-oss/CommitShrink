@@ -81,7 +81,7 @@ def render_header(assessment: Assessment, cfg: dict) -> None:
         ),
     ]
     for label, value in rows:
-        st.markdown(f"**{label}**　{value}")
+        st.markdown(f"**{label}**{rc['label_sep']}{value}")
 
 
 def render_diagnosis_section(
@@ -91,22 +91,22 @@ def render_diagnosis_section(
     dl = rc["diagnosis_labels"]
 
     st.subheader(rc["sections"]["diagnosis"])
-    st.markdown(f"**{dl['chief_complaint']}**　{dl['chief_complaint_text']}")
+    st.markdown(f"**{dl['chief_complaint']}**{rc['label_sep']}{dl['chief_complaint_text']}")
 
     diagnoses = assessment.diagnoses
     if not diagnoses:
         st.markdown(dl["none_confirmed"])
         if assessment.notes:
-            st.markdown(f"**{dl['other']}**　{'；'.join(assessment.notes)}")
+            st.markdown(f"**{dl['other']}**{rc['label_sep']}{dl['list_join'].join(renderer.rendered_notes(assessment))}")
     else:
         primary, secondary, others = diagnoses[0], diagnoses[1:3], diagnoses[3:]
-        st.markdown(f"**{dl['primary']}**　{renderer._diagnosis_line(primary)}")
+        st.markdown(f"**{dl['primary']}**{rc['label_sep']}{renderer._diagnosis_line(primary)}")
         if secondary:
-            joined = " ｜ ".join(renderer._diagnosis_line(d) for d in secondary)
-            st.markdown(f"**{dl['secondary']}**　{joined}")
-        other_parts = [f"{d.code} {d.name}" for d in others] + assessment.notes
+            joined = dl["secondary_join"].join(renderer._diagnosis_line(d) for d in secondary)
+            st.markdown(f"**{dl['secondary']}**{rc['label_sep']}{joined}")
+        other_parts = [f"{d.code} {renderer.diagnosis_name(d)}" for d in others] + renderer.rendered_notes(assessment)
         if other_parts:
-            st.markdown(f"**{dl['other']}**　{'；'.join(other_parts)}")
+            st.markdown(f"**{dl['other']}**{rc['label_sep']}{dl['list_join'].join(other_parts)}")
 
     composite = assessment.metrics["composite_score"]
     st.markdown(f"**{dl['composite_fmt'].format(score=composite.display)}**")
@@ -121,7 +121,7 @@ def render_diagnosis_section(
     impression = dl["impression_fmt"].format(
         n=assessment.stats.total, night=assessment.stats.night_count, allcaps_note=allcaps_note
     )
-    st.markdown(f"**{dl['impression']}**　{impression}")
+    st.markdown(f"**{dl['impression']}**{rc['label_sep']}{impression}")
 
 
 def render_metrics_section(
@@ -137,13 +137,14 @@ def render_metrics_section(
     rows = []
     for mid in DISPLAY_METRIC_IDS:
         m = assessment.metrics[mid]
+        spec = renderer.metrics_spec[mid]
         value = f"{m.display}*" if m.healthy else m.display
         rows.append(
             {
-                headers[0]: m.name,
+                headers[0]: spec["name"],
                 headers[1]: value,
                 headers[2]: previous.get(mid, ml["no_history"]),
-                headers[3]: m.reference,
+                headers[3]: str(spec["reference"]),
                 headers[4]: renderer._percentile_text(m),
             }
         )
@@ -164,7 +165,11 @@ def render_records_section(assessment: Assessment, cfg: dict, renderer: ReportRe
     records = [d for d in assessment.diagnoses if d.evidence][:MAX_RECORDS]
     for i, d in enumerate(records, start=1):
         title = rl["record_fmt"].format(
-            i=i, code=d.code, name=d.name, sev=d.severity, sev_label=sev_labels[d.severity]
+            i=i,
+            code=d.code,
+            name=renderer.diagnosis_name(d),
+            sev=d.severity,
+            sev_label=sev_labels[d.severity],
         )
         with st.expander(title, expanded=(i == 1)):
             first, last = d.evidence[0], d.evidence[-1]
@@ -172,7 +177,7 @@ def render_records_section(assessment: Assessment, cfg: dict, renderer: ReportRe
             if last.ts != first.ts:
                 same_day = last.ts.date() == first.ts.date()
                 span += f" – {last.ts.strftime('%H:%M' if same_day else '%m-%d %H:%M')}"
-            st.caption(f"{rl['time_span']}　{span}")
+            st.caption(f"{rl['time_span']}{rc['label_sep']}{span}")
 
             st.code("\n".join(renderer._evidence_lines(assessment, d)))
 
@@ -180,8 +185,10 @@ def render_records_section(assessment: Assessment, cfg: dict, renderer: ReportRe
                 assessment.masked_subjects.get(c.sha, c.subject) != c.subject
                 for c in d.evidence[:MAX_EVIDENCE_LINES]
             )
-            interpretation = d.text + (rl["masking_note"] if d.masked or evidence_masked else "")
-            st.markdown(f"**{rl['interpretation']}**　{interpretation}")
+            interpretation = renderer.diagnosis_text(d) + (
+                rl["masking_note"] if d.masked or evidence_masked else ""
+            )
+            st.markdown(f"**{rl['interpretation']}**{rc['label_sep']}{interpretation}")
 
 
 def render_ekg_chart(assessment: Assessment, cfg: dict) -> None:
@@ -253,12 +260,14 @@ def render_ekg_chart(assessment: Assessment, cfg: dict) -> None:
     )
 
 
-def render_prescriptions_section(assessment: Assessment, cfg: dict) -> None:
+def render_prescriptions_section(
+    assessment: Assessment, cfg: dict, renderer: ReportRenderer
+) -> None:
     rc = cfg["report_copy"]
     pl = rc["prescriptions_labels"]
 
     st.subheader(rc["sections"]["prescriptions"])
-    items = [d.prescription for d in assessment.diagnoses[:MAX_PRESCRIPTIONS]]
+    items = [renderer.diagnosis_prescription(d) for d in assessment.diagnoses[:MAX_PRESCRIPTIONS]]
     items.append(pl["social_support"])
     items.append(pl["referral"])
     for i, item in enumerate(items, start=1):
@@ -272,9 +281,9 @@ def render_disclaimer_section(cfg: dict) -> None:
 
     st.subheader(rc["sections"]["disclaimer"])
     st.markdown(_copy(bp["disclaimer"]))
-    st.markdown(f"**{fl['followup']}**　{fl['followup_value']}")
-    st.markdown(f"**{fl['qa']}**　{bp['qa_note']}")
-    st.markdown(f"**{fl['attending']}**　{fl['attending_value']}")
+    st.markdown(f"**{fl['followup']}**{rc['label_sep']}{fl['followup_value']}")
+    st.markdown(f"**{fl['qa']}**{rc['label_sep']}{bp['qa_note']}")
+    st.markdown(f"**{fl['attending']}**{rc['label_sep']}{fl['attending_value']}")
 
 
 def render_report(assessment: Assessment, cfg: dict, trend: Trend | None = None) -> None:
@@ -289,22 +298,35 @@ def render_report(assessment: Assessment, cfg: dict, trend: Trend | None = None)
     st.divider()
     render_ekg_chart(assessment, cfg)
     st.divider()
-    render_prescriptions_section(assessment, cfg)
+    render_prescriptions_section(assessment, cfg, renderer)
     st.divider()
     render_disclaimer_section(cfg)
 
 
-if "cfg" not in st.session_state:
-    st.session_state.cfg = load_config()
+st.set_page_config(page_title="CommitShrink", page_icon=":stethoscope:")
+
+# Report language. The Assessment is language-neutral (see diagnoser.Diagnosis),
+# so switching this re-renders the stored result in the new language WITHOUT
+# re-running the assessment -- render_report reads the chosen cfg each rerun.
+LANGS = {"English": "en", "中文": "zh"}
+lang = LANGS[st.sidebar.radio("Language / 语言", list(LANGS), index=0)]
+
+
+def _cfg_for(language: str) -> dict:
+    key = f"cfg_{language}"
+    if key not in st.session_state:
+        st.session_state[key] = load_config(language)
+    return st.session_state[key]
+
+
+cfg = _cfg_for(lang)
+rc = cfg["report_copy"]
+
 if "assessment" not in st.session_state:
     st.session_state.assessment = None
 if "trend" not in st.session_state:
     st.session_state.trend = None
 
-cfg = st.session_state.cfg
-rc = cfg["report_copy"]
-
-st.set_page_config(page_title="CommitShrink", page_icon=":stethoscope:")
 st.title(rc["center_name"])
 
 with st.form("assessment_form"):

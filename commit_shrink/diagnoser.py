@@ -21,7 +21,6 @@ from typing import Callable
 
 from .analyzer import (
     PeriodStats,
-    collapse_cjk_whitespace,
     is_low_info,
     is_scream,
     normalize_message,
@@ -38,14 +37,25 @@ _VERSION_3PLUS_RE = re.compile(r"\bv(?:[3-9]|[1-9]\d+)\b", re.IGNORECASE)
 
 @dataclass
 class Diagnosis:
+    """A detection result, free of display strings.
+
+    The diagnosis prose, name, and prescription are rendered from the config
+    at display time (report.ReportRenderer), so the same result can be shown
+    in any language. `args` holds the language-neutral values a diagnosis
+    template needs (ints, pre-formatted %/±numbers, strftime times, the masked
+    evidence subject; a duration is carried raw as `duration_td` because its
+    unit words are language-specific). `notes` drives the optional
+    diagnosis_notes clauses: {note_key: {"show": bool, "args": {...}}}.
+    """
+
     id: str
     code: str
-    name: str
     severity: str  # I..IV
-    text: str  # filled diagnosis template
-    prescription: str
     evidence: list[Commit] = field(default_factory=list)
-    masked: bool = False  # evidence quoted in `text` was redacted
+    masked: bool = False  # evidence quoted in the diagnosis text was redacted
+    args: dict = field(default_factory=dict)
+    notes: dict = field(default_factory=dict)
+    template_key: str = "diagnosis"  # "diagnosis_alt" selects a branch template
 
     @property
     def rank_key(self) -> tuple[int, int]:
@@ -68,8 +78,6 @@ class Diagnoser:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.spec = {s["id"]: s for s in cfg["symptoms"]}
-        self.units = cfg["report_copy"]["units"]
-        self.missing_data_copy = cfg["boilerplate"]["missing_data_copy"]
         flags = re.IGNORECASE
 
         def pat(sid: str, key: str = "pattern") -> re.Pattern:
@@ -106,17 +114,6 @@ class Diagnoser:
         masked = self.re_emo.sub(repl, text)
         return masked, masked != text
 
-    def _fmt_duration(self, td: timedelta | None) -> str:
-        if td is None:
-            return self.units["at_least_hours"].format(v=72)
-        minutes = td.total_seconds() / 60
-        if minutes < 120:
-            return self.units["minutes"].format(v=round(minutes))
-        hours = minutes / 60
-        if hours < 48:
-            return self.units["hours"].format(v=f"{hours:.1f}")
-        return self.units["days"].format(v=f"{hours / 24:.1f}")
-
     def _segments(self, commits: list[Commit]) -> list[list[Commit]]:
         """Split into topic segments: gap < 2h AND overlapping file sets."""
         segments: list[list[Commit]] = []
@@ -137,17 +134,26 @@ class Diagnoser:
             segments.append(current)
         return segments
 
-    def _diag(self, sid: str, severity: str, text: str, evidence: list[Commit], masked: bool = False) -> Diagnosis:
-        spec = self.spec[sid]
+    def _diag(
+        self,
+        sid: str,
+        severity: str,
+        evidence: list[Commit],
+        *,
+        args: dict | None = None,
+        notes: dict | None = None,
+        template_key: str = "diagnosis",
+        masked: bool = False,
+    ) -> Diagnosis:
         return Diagnosis(
             id=sid,
-            code=spec["code"],
-            name=spec["name"],
+            code=self.spec[sid]["code"],
             severity=severity,
-            text=collapse_cjk_whitespace(" ".join(text.split())),
-            prescription=collapse_cjk_whitespace(" ".join(str(spec["prescription"]).split())),
             evidence=evidence,
             masked=masked,
+            args=args or {},
+            notes=notes or {},
+            template_key=template_key,
         )
 
     # -- detectors ----------------------------------------------------------
@@ -171,10 +177,12 @@ class Diagnoser:
             ((self._grade_chain(c), c) for c in chains),
             key=lambda g: (SEVERITY_ORDER[g[0]], len(g[1])),
         )
-        text = self.spec["repeated_fix_loop"]["diagnosis"].format(
-            n=len(worst), duration=self._fmt_duration(worst[-1].ts - worst[0].ts)
+        return self._diag(
+            "repeated_fix_loop",
+            sev,
+            worst,
+            args={"n": len(worst), "duration_td": worst[-1].ts - worst[0].ts},
         )
-        return self._diag("repeated_fix_loop", sev, text, worst)
 
     @staticmethod
     def _grade_naming(hits: list[Commit], variants: list[str]) -> str:
@@ -197,8 +205,7 @@ class Diagnoser:
         sev, hits, variants = max(
             candidates, key=lambda c: (SEVERITY_ORDER[c[0]], len(c[2]))
         )
-        text = self.spec["naming_collapse"]["diagnosis"].format(n=len(variants))
-        return self._diag("naming_collapse", sev, text, hits)
+        return self._diag("naming_collapse", sev, hits, args={"n": len(variants)})
 
     def _decision_regret(self, period: list[Commit]) -> Diagnosis | None:
         reverts = [c for c in period if self.re_revert.search(c.message)]
@@ -215,10 +222,13 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        spec = self.spec["decision_regret"]
-        note = spec["diagnosis_notes"]["recursive_note"] if recursive else ""
-        text = spec["diagnosis"].format(n=n, recursive_note=note)
-        return self._diag("decision_regret", sev, text, reverts)
+        return self._diag(
+            "decision_regret",
+            sev,
+            reverts,
+            args={"n": n},
+            notes={"recursive_note": {"show": recursive}},
+        )
 
     def _emotional_outburst(self, period: list[Commit], scores: dict[str, float]) -> Diagnosis | None:
         hits = [c for c in period if self.re_emo.search(c.message)]
@@ -235,10 +245,13 @@ class Diagnoser:
         else:
             sev = "I"
         evidence_text, masked = self.mask(peak.subject)
-        text = self.spec["emotional_outburst"]["diagnosis"].format(
-            n=n, time=_fmt_time(peak), evidence=evidence_text
+        return self._diag(
+            "emotional_outburst",
+            sev,
+            hits,
+            args={"n": n, "time": _fmt_time(peak), "evidence": evidence_text},
+            masked=masked,
         )
-        return self._diag("emotional_outburst", sev, text, hits, masked=masked)
 
     def _p0_incident(self, period: list[Commit]) -> Diagnosis | None:
         events = [c for c in period if c.is_night and self.re_p0.search(c.message)]
@@ -246,10 +259,13 @@ class Diagnoser:
             return None
         first = events[0]
         evidence_text, masked = self.mask(first.subject)
-        text = self.spec["p0_incident"]["diagnosis"].format(
-            time=_fmt_time(first), evidence=evidence_text
+        return self._diag(
+            "p0_incident",
+            "IV",
+            events,
+            args={"time": _fmt_time(first), "evidence": evidence_text},
+            masked=masked,
         )
-        return self._diag("p0_incident", "IV", text, events, masked=masked)
 
     def _night_despair(self, period: list[Commit], stats: PeriodStats) -> Diagnosis | None:
         by_ratio = stats.night_ratio > 0.15
@@ -264,16 +280,23 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"  # also covers the mood-only path per the yaml rule
-        spec = self.spec["night_despair"]
-        note = ""
         # The "below daytime baseline" claim needs actual daytime samples.
         has_day_samples = stats.total > stats.night_count
-        if stats.night_count and has_day_samples and stats.night_mood < stats.day_mood:
-            note = spec["diagnosis_notes"]["night_mood_note"].format(
-                night_mood=f"{stats.night_mood:+.2f}"
-            )
-        text = spec["diagnosis"].format(ratio=f"{stats.night_ratio * 100:.0f}%", night_mood_note=note)
-        return self._diag("night_despair", sev, text, [c for c in period if c.is_night])
+        show_mood = bool(
+            stats.night_count and has_day_samples and stats.night_mood < stats.day_mood
+        )
+        return self._diag(
+            "night_despair",
+            sev,
+            [c for c in period if c.is_night],
+            args={"ratio": f"{stats.night_ratio * 100:.0f}%"},
+            notes={
+                "night_mood_note": {
+                    "show": show_mood,
+                    "args": {"night_mood": f"{stats.night_mood:+.2f}"},
+                }
+            },
+        )
 
     def _boundary(self, period: list[Commit], stats: PeriodStats) -> Diagnosis | None:
         if stats.weekend_ratio <= 0.20 and stats.weekend_count <= stats.weekday_count:
@@ -286,10 +309,12 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        text = self.spec["boundary_dissolution"]["diagnosis"].format(
-            ratio=f"{stats.weekend_ratio * 100:.0f}%"
+        return self._diag(
+            "boundary_dissolution",
+            sev,
+            [c for c in period if c.is_weekend],
+            args={"ratio": f"{stats.weekend_ratio * 100:.0f}%"},
         )
-        return self._diag("boundary_dissolution", sev, text, [c for c in period if c.is_weekend])
 
     def _anxious(self, period: list[Commit]) -> Diagnosis | None:
         commits = sorted(period, key=lambda c: c.ts)
@@ -326,13 +351,13 @@ class Diagnoser:
             sev = "I"
         biggest = max(episodes, key=lambda e: e[2])
         evidence = commits[biggest[0] : biggest[1] + 1]
-        text = self.spec["anxious_committing"]["diagnosis"].format(n=n, peak=peak)
-        return self._diag("anxious_committing", sev, text, evidence)
+        return self._diag("anxious_committing", sev, evidence, args={"n": n, "peak": peak})
 
     def _history(self, rewrites: int | None, notes: list[str]) -> Diagnosis | None:
-        spec = self.spec["history_revisionism"]
         if rewrites is None:
-            notes.append(f"{spec['code']} {spec['name']}：{self.missing_data_copy}")
+            # Reflog unavailable: degrade to the "specimen declined" note, whose
+            # display string is assembled from the config at render time.
+            notes.append("history_revisionism")
             return None
         if rewrites == 0:
             return None
@@ -344,8 +369,7 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        text = spec["diagnosis"].format(n=rewrites)
-        return self._diag("history_revisionism", sev, text, [])
+        return self._diag("history_revisionism", sev, [], args={"n": rewrites})
 
     def _alexithymia(self, period: list[Commit], stats: PeriodStats) -> Diagnosis | None:
         ratio = stats.low_info_ratio
@@ -359,9 +383,8 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        text = self.spec["alexithymia"]["diagnosis"].format(ratio=f"{ratio * 100:.0f}%")
         evidence = [c for c in period if is_low_info(c.message, self.stoplist)]
-        return self._diag("alexithymia", sev, text, evidence)
+        return self._diag("alexithymia", sev, evidence, args={"ratio": f"{ratio * 100:.0f}%"})
 
     def _binge(self, period: list[Commit], window: list[Commit]) -> Diagnosis | None:
         episodes: list[tuple[Commit, timedelta | None]] = []
@@ -392,10 +415,12 @@ class Diagnoser:
             episodes, key=lambda e: (SEVERITY_ORDER[level(e[0])], e[0].files_changed)
         )
         sev = level(worst)
-        text = self.spec["binge_committing"]["diagnosis"].format(
-            n=worst.files_changed, duration=self._fmt_duration(gap)
+        return self._diag(
+            "binge_committing",
+            sev,
+            [e[0] for e in episodes],
+            args={"n": worst.files_changed, "duration_td": gap},
         )
-        return self._diag("binge_committing", sev, text, [e[0] for e in episodes])
 
     def _commitment(self, period: list[Commit], stats: PeriodStats) -> Diagnosis | None:
         hits = [c for c in period if self.re_wip.search(c.message)]
@@ -414,8 +439,9 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        text = self.spec["commitment_avoidance"]["diagnosis"].format(ratio=f"{ratio * 100:.0f}%")
-        return self._diag("commitment_avoidance", sev, text, hits)
+        return self._diag(
+            "commitment_avoidance", sev, hits, args={"ratio": f"{ratio * 100:.0f}%"}
+        )
 
     def _magical(self, period: list[Commit], scores: dict[str, float]) -> Diagnosis | None:
         hits = [c for c in period if self.re_magic.search(c.message)]
@@ -433,8 +459,13 @@ class Diagnoser:
             sev = "I"
         rep = min(hits, key=lambda c: scores[c.sha])
         evidence_text, masked = self.mask(rep.subject)
-        text = self.spec["magical_thinking"]["diagnosis"].format(n=n, evidence=evidence_text)
-        return self._diag("magical_thinking", sev, text, hits, masked=masked)
+        return self._diag(
+            "magical_thinking",
+            sev,
+            hits,
+            args={"n": n, "evidence": evidence_text},
+            masked=masked,
+        )
 
     def _techdebt_recurrence(
         self, hits: list[Commit], techdebt_history: dict[str, str] | None
@@ -468,10 +499,13 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        spec = self.spec["stockholm_techdebt"]
-        note = spec["diagnosis_notes"]["recurrence_note"] if recurring is not None else ""
-        text = spec["diagnosis"].format(n=n, recurrence_note=note)
-        return self._diag("stockholm_techdebt", sev, text, hits)
+        return self._diag(
+            "stockholm_techdebt",
+            sev,
+            hits,
+            args={"n": n},
+            notes={"recurrence_note": {"show": recurring is not None}},
+        )
 
     def _time_perception(self, period: list[Commit], window: list[Commit]) -> Diagnosis | None:
         confirmed: list[tuple[Commit, str, int]] = []  # (commit, branch, n_or_lines)
@@ -503,14 +537,25 @@ class Diagnoser:
             sev = "II"
         else:
             sev = "I"
-        spec = self.spec["time_perception"]
         first, branch, value = confirmed[0]
         evidence_text, masked = self.mask(first.subject)
+        evidence = [c for c, _, _ in confirmed]
         if branch == "diff":
-            text = spec["diagnosis"].format(lines=value, evidence=evidence_text)
-        else:
-            text = spec["diagnosis_alt"].format(n=value, evidence=evidence_text)
-        return self._diag("time_perception", sev, text, [c for c, _, _ in confirmed], masked=masked)
+            return self._diag(
+                "time_perception",
+                sev,
+                evidence,
+                args={"lines": value, "evidence": evidence_text},
+                masked=masked,
+            )
+        return self._diag(
+            "time_perception",
+            sev,
+            evidence,
+            args={"n": value, "evidence": evidence_text},
+            template_key="diagnosis_alt",
+            masked=masked,
+        )
 
     # -- entry point ---------------------------------------------------------
 

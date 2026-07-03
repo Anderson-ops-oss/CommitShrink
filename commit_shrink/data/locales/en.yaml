@@ -230,6 +230,7 @@ report_copy:
   center_name: "CommitShrink™ Center for Developmental Mental Health Assessment"
   report_title_fmt: "Periodic Psychological Status Assessment · Assessment Week {week}"
   label_sep: ": "   # separator between a bold label and its value (zh uses U+3000)
+  missing_data_note_fmt: "{code} {name}: {copy}"   # GIT-88.8 degradation line (zh uses U+FF1A)
   header_labels:
     patient: Subject
     period: Assessment Period
