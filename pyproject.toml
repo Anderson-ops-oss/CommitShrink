@@ -26,4 +26,4 @@ commit-shrink = "commit_shrink.cli:main"
 include = ["commit_shrink*"]
 
 [tool.setuptools.package-data]
-commit_shrink = ["data/*.yaml"]
+commit_shrink = ["data/*.yaml", "data/locales/*.yaml"]

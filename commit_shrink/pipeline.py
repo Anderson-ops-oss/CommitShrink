@@ -29,10 +29,65 @@ class NoCommitsError(Exception):
     """No commits found in the assessment period."""
 
 
-def load_config() -> dict:
+SUPPORTED_LANGS = ("zh", "en")
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively overlay `override` onto `base` (mutates and returns base).
+
+    Nested dicts merge key-by-key; every other value (str, list, scalar) is
+    replaced wholesale. Used to splice a locale's display strings over the
+    Chinese base without disturbing sibling keys.
+    """
+    for key, val in override.items():
+        if isinstance(base.get(key), dict) and isinstance(val, dict):
+            _deep_merge(base[key], val)
+        else:
+            base[key] = val
+    return base
+
+
+def _overlay_by_id(items: list[dict], overrides: dict) -> None:
+    """Overlay display fields onto list entries keyed by their `id`.
+
+    `symptoms` and `metrics` are lists in symptoms.yaml but id-keyed maps in a
+    locale file; this splices each locale entry onto the matching list item in
+    place, leaving detection rules (trigger/severity/norm/…) untouched.
+    """
+    for item in items:
+        override = overrides.get(item.get("id"))
+        if override:
+            _deep_merge(item, override)
+
+
+def _apply_locale(cfg: dict, lang: str) -> None:
+    if lang not in SUPPORTED_LANGS:
+        raise ValueError(f"unsupported language {lang!r}; expected one of {SUPPORTED_LANGS}")
+    ref = resources.files("commit_shrink").joinpath(f"data/locales/{lang}.yaml")
+    with ref.open(encoding="utf-8") as f:
+        locale = yaml.safe_load(f)
+    for block in ("meta", "report_copy", "boilerplate"):
+        if block in locale:
+            _deep_merge(cfg.setdefault(block, {}), locale[block])
+    for list_block in ("metrics", "symptoms"):
+        if list_block in locale:
+            _overlay_by_id(cfg.get(list_block, []), locale[list_block])
+
+
+def load_config(lang: str = "zh") -> dict:
+    """Load the runtime config, optionally overlaying a display-copy locale.
+
+    Detection rules (triggers, severity thresholds, norms) always come from
+    symptoms.yaml, which also carries the Chinese display copy inline. For any
+    non-`zh` language, the matching data/locales/<lang>.yaml is deep-merged
+    over the display fields only (see that directory).
+    """
     ref = resources.files("commit_shrink").joinpath("data/symptoms.yaml")
     with ref.open(encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    if lang and lang != "zh":
+        _apply_locale(cfg, lang)
+    return cfg
 
 
 def compute_window(days: int, until: datetime | None) -> tuple[datetime, datetime]:

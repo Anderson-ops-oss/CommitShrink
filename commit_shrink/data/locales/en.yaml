@@ -1,0 +1,376 @@
+# ============================================================
+# CommitShrink — English display-copy overlay (locales/en.yaml)
+# ============================================================
+# This file carries DISPLAY STRINGS ONLY. It is merged, by id, onto
+# the shared source of truth in commit_shrink/data/symptoms.yaml.
+# Detection logic — triggers, regexes, severity thresholds, norm
+# parameters, formulas, scales, reference ranges — lives in
+# symptoms.yaml and is intentionally absent here.
+#
+# Re-authoring note: the register is that of a real developer
+# mental-health clinical report (DSM-5-TR diagnostic phrasing,
+# psychometric/norms language, institutional bureaucracy). Copy is
+# re-authored to land natively in English, not translated.
+# ============================================================
+
+meta:
+  severity_labels:
+    I: Mild
+    II: Moderate
+    III: Severe
+    IV: Extreme
+  norms_disclaimer: >-
+    Norms derived from this center's proprietary fictional normative
+    database (n = 10,000 fictional developers). The fictional distribution
+    has been carefully calibrated to ensure the subject retains ample room
+    for improvement at all times.
+
+# ------------------------------------------------------------
+# Quantitative indicators (Section II) — display names only.
+# ------------------------------------------------------------
+metrics:
+  night_despair_index:
+    name: Nocturnal Despair Index
+  boundary_integrity:
+    name: Work-Life Boundary Integrity
+  emotional_baseline:
+    name: Emotional Baseline
+  fix_loop_density:
+    name: Fix-Loop Density
+  alexithymia_index:
+    name: Commit Alexithymia Index
+  composite_score:
+    name: Composite Mental Health Score
+
+# ------------------------------------------------------------
+# Symptom display copy (Sections I & III), keyed by id.
+# ------------------------------------------------------------
+symptoms:
+
+  repeated_fix_loop:      # GIT-42.2
+    name: Compulsive Fix Disorder
+    diagnosis: >-
+      Over {duration}, the subject administered {n} corrective interventions
+      to a single defect. The linguistic modality progressed sequentially
+      through statement, restatement, emphasis, and supplication, with
+      expressed confidence in each successive fix declining monotonically.
+    prescription: >-
+      Exposure and Response Prevention (ERP): following the second failed
+      fix of the same defect, the subject is to leave the keyboard for 15
+      minutes and consume 200 ml of water (response prevention), then reread
+      the error message in full (exposure) — including the lines the subject
+      has pre-classified as "definitely irrelevant."
+
+  naming_collapse:        # GIT-60.1
+    name: Naming System Collapse
+    diagnosis: >-
+      The subject's semantic trust in the word "final" has decompensated,
+      necessitating the introduction of {n} auxiliary qualifiers
+      (final_v2, final_REAL, final_actually_final) to preserve referential
+      function.
+    prescription: >-
+      Transition to semantically neutral version numbers is advised.
+      Numbers increment; they do not lie.
+
+  decision_regret:        # GIT-31.0
+    name: Decision Regret Syndrome
+    diagnosis: >-
+      {n} decision reversals were detected within the assessment period.
+      {recursive_note}
+    diagnosis_notes:
+      recursive_note: >-
+        The series includes a revert of a prior revert, constituting
+        second-order rumination; continued observation is advised.
+    prescription: >-
+      No fewer than 30 seconds of mindful breathing before each merge, with
+      silent recitation of: "A green CI does not mean it is correct."
+
+  emotional_outburst:     # GIT-19.3
+    name: Acute Emotional Dysregulation Episode
+    diagnosis: >-
+      {n} verbal affect-discharge events were recorded during the period,
+      peaking at {time} ("{evidence}").
+    prescription: >-
+      A commit message is a permanent medical record. The subject is advised
+      to redirect affective discharge to a non-archivable medium, e.g., the
+      surrounding air.
+
+  p0_incident:            # GIT-99.0
+    name: Psychological Code Red (P0 Incident)
+    diagnosis: >-
+      At {time}, the subject addressed a production incident during the
+      nocturnal window ("{evidence}"). This single event simultaneously
+      breached the temporal boundary and the acute-stress threshold.
+    prescription: >-
+      None. This center observes a respectful silence and has scheduled the
+      subject for a priority follow-up.
+
+  night_despair:          # GIT-23.5
+    name: Nocturnal Despair Disposition
+    diagnosis: >-
+      Nocturnal commits account for {ratio}. {night_mood_note}The available
+      evidence does not support the hypothesis that darkness directly produces
+      defects, but does support its participation in the decision to fix them.
+    diagnosis_notes:
+      night_mood_note: "Mean nocturnal sentiment {night_mood}, below the daytime baseline. "
+    prescription: >-
+      All architectural decisions made after 23:00 are to be deferred to a
+      next-day review at 10:00 prior to execution.
+
+  boundary_dissolution:   # GIT-55.4
+    name: Work-Life Boundary Dissolution
+    diagnosis: >-
+      Weekend commits account for {ratio}. In the subject's temporal system,
+      "the weekend" has degraded into a purely calendrical concept.
+    prescription: >-
+      The introduction of external constraints to restore the boundary is
+      advised. This center does not recommend willpower-based interventions —
+      a conclusion derived from a retrospective cohort study of the subject's
+      prior medical record (git log).
+
+  anxious_committing:     # GIT-47.1
+    name: Anxious Committing Tendency
+    diagnosis: >-
+      {n} high-frequency committing episodes were detected (peak {peak}
+      commits per 30 minutes). The fragmented-preservation behavior is
+      indicative of a pathological fear of losing work product.
+    prescription: >-
+      Your work will not disappear — this is the one problem git was designed
+      to solve. The subject is advised to entrust that fear to it, as a
+      supervised exercise in trust.
+
+  history_revisionism:    # GIT-88.8
+    name: Historical Revisionism
+    diagnosis: >-
+      {n} history-rewriting acts were detected. The subject attempts to
+      address the present by altering the past — an approach that psychology
+      and version control concur is dangerous.
+    prescription: The past cannot be fixed, only merged.
+
+  alexithymia:            # GIT-11.2
+    name: Commit Alexithymia
+    diagnosis: >-
+      {ratio} of commit messages convey no semantic content whatsoever. The
+      subject has retained the act of committing but lost the language to
+      describe it.
+    prescription: >-
+      One complete-sentence commit per day (the grammatical subject may be
+      omitted; the predicate and object may not). From "fix" to "fix: handle
+      timezone offset on login timeout" — this center believes the subject is
+      capable.
+
+  binge_committing:       # GIT-36.6
+    name: Binge Committing (Silence-Purge Type)
+    diagnosis: >-
+      After {duration} of silence, a single purge of changes across {n}
+      files. This center has not yet observed a human sample capable of
+      reviewing a change of that magnitude in one sitting.
+    prescription: >-
+      Smaller commits are advised. The ideal size of a commit is the size the
+      subject would dare to describe honestly in its message.
+
+  commitment_avoidance:   # GIT-50.0
+    name: Commitment Avoidance Disorder
+    diagnosis: >-
+      {ratio} of commits during the period were marked WIP. The subject uses
+      the "in progress" state to avoid final commitment to the code.
+      Etymological note: to commit means, at root, to commit.
+    prescription: >-
+      Every WIP must receive a formal name within 24 hours; any left unnamed
+      past the deadline are transferred to GIT-11.2 (Commit Alexithymia) for
+      consolidated statistics.
+
+  magical_thinking:       # GIT-70.7
+    name: Magical Thinking
+    diagnosis: >-
+      {n} cessions of causality were detected; representative sample:
+      "{evidence}". The subject has outsourced certainty to supernatural
+      forces, and CI does not accept that dependency injection.
+    prescription: >-
+      Running a test before typing "should work" raises the accuracy of the
+      phrase from a magical level to a statistical one.
+
+  stockholm_techdebt:     # GIT-77.7
+    name: Tech-Debt Attachment (Stockholm) Syndrome
+    diagnosis: >-
+      {n} "temporary" measures were detected. This center's survival analysis
+      of the subject's prior "temporary" measures reports median survival not
+      reached (no case closed within the follow-up period). The subject has
+      formed a long-term attachment to the technical debt and has begun to
+      advocate on its behalf. {recurrence_note}
+    diagnosis_notes:
+      recurrence_note: >-
+        One such measure has recurred verbatim more than 90 days after its
+        first record — this center holds that this is no longer a "debt"
+        relationship and recommends reclassification as long-term cohabitation.
+    prescription: >-
+      Every "for now" must carry an issue number. Otherwise it is not
+      technical debt; it is a technical legacy.
+
+  time_perception:        # GIT-13.0
+    name: Time Perception Disorder
+    diagnosis: >-
+      The subject described a {lines}-line change as "{evidence}". A systematic
+      bias exists between the subject's subjective estimate of "simple" and the
+      objective complexity; the direction of the bias is stable and may be used
+      for calibration.
+    diagnosis_alt: >-
+      The subject described the change as "{evidence}", then administered {n}
+      corrective interventions to it within the following 24 hours.
+    prescription: >-
+      On the next estimate, multiply the intuitive value by 3. This coefficient
+      was obtained by this center's regression on the subject's historical data
+      (the 95% confidence interval excludes 1); it is an individualized
+      parameter and is not to be shared with others.
+
+# ------------------------------------------------------------
+# Report rendering copy (report chrome).
+# ------------------------------------------------------------
+report_copy:
+  center_name: "CommitShrink™ Center for Developmental Mental Health Assessment"
+  report_title_fmt: "Periodic Psychological Status Assessment · Assessment Week {week}"
+  label_sep: ": "   # separator between a bold label and its value (zh uses U+3000)
+  header_labels:
+    patient: Subject
+    period: Assessment Period
+    sample: Valid Sample
+    method: Administration Method
+    instrument: Assessment Instrument
+    report_date: Report Date
+    report_no: Report No.
+  header_values:
+    method: >-
+      Non-invasive naturalistic behavioral observation (the subject was
+      unaware of assessment during data generation; social-desirability
+      bias = 0, Hawthorne effect = 0).
+    instrument: >-
+      CommitShrink v0.1 · cross-cultural reliability and validity established
+      (n = 1) · test-retest reliability r = 1.00
+    report_date_suffix: " (system-generated; no experimenter effect)"
+    report_no_fmt: "CS-{year}-W{week:02d}-0001"
+    sample_fmt: >-
+      {n} commits (no exclusions; of which {low_info} low-information
+      specimens have been included in the alexithymia statistics)
+  sections:
+    diagnosis: "I. Overall Diagnosis"
+    metrics: "II. Quantitative Indicators"
+    records: "III. Symptom Episode Records (Selected Clinical Evidence)"
+    ekg: "IV. Emotional EKG"
+    prescriptions: "V. Prescription"
+    disclaimer: "VI. Disclaimer & Follow-up"
+  diagnosis_labels:
+    chief_complaint: Chief Complaint
+    chief_complaint_text: >-
+      None. The subject denies any subjective distress and exhibits no
+      help-seeking behavior; the sample was acquired at this center's own
+      initiative.
+    primary: Primary Diagnosis
+    secondary: Secondary Diagnosis
+    other: Other Conditions of Clinical Concern
+    none_confirmed: >-
+      No condition was detected during this period. This center regards this
+      outcome with rare relief and recommends re-examination.
+    severity_fmt: " ({label})"
+    composite_fmt: "Composite Mental Health Score for this period: {score} / 100"
+    period_delta_fmt: "{delta} points versus last week"
+    decline_streak_fmt: ", {n} consecutive weeks of decline."
+    extrapolation_fmt: >-
+      Extrapolating from the current slope, the score is projected to reach
+      the floor of this instrument (0 points) by Assessment Week {week}.
+    impression: Clinical Impression
+    impression_fmt: >-
+      The subject committed {n} times during this period, of which {night}
+      occurred between 00:00 and 05:59. {allcaps_note}
+    allcaps_note_fmt: "All {u} all-caps commits occurred during the nocturnal window."
+    secondary_join: " | "        # separator between secondary diagnoses (zh uses U+FF5C)
+    list_join: "; "              # joins notes / other-concerns lists (zh uses U+FF1B)
+    trend_wrap_fmt: "({note})"   # wraps the composite-score trend note (zh uses U+FF08/U+FF09)
+  metrics_labels:
+    headers: [Indicator, This Period, Last Period, Reference Range, Norm Percentile]
+    no_history: "—"
+    first_assessment_note: "First assessment; no historical comparison available."
+    percentile_above: "Higher than {pct}% of comparable samples"
+    percentile_below: "Lower than {pct}% of comparable samples"
+  records_labels:
+    record_fmt: "Record {i} | {code} {name} · Severity {sev} ({sev_label})"
+    time_span: Episode Window
+    interpretation: Clinical Interpretation
+    masking_note: "(specimen partially redacted per this center's ethics protocol)"
+  ekg_labels:
+    trough_fmt: "Emotional low point: {time} (\"{evidence}\", corrected sentiment score {score})"
+    x_axis: Time
+    y_axis: Sentiment
+    legend_commits: Commits
+    legend_trough: Emotional Low
+  prescriptions_labels:
+    social_support: >-
+      [Social Support] Restating the problem aloud to a rubber duck is
+      advised. This center's research (unpublished, n = 1) indicates efficacy
+      non-inferior to restating it to a colleague, with no incurred social
+      debt.
+    referral: >-
+      [Referral Note] This center holds no prescribing authority. Caffeine
+      intake falls outside the jurisdiction of this report and remains a
+      matter between the subject and the subject's cardiologist.
+  footer_labels:
+    followup: Follow-up
+    followup_value: Automatically scheduled upon the next git push.
+    qa: Quality Control
+    attending: Attending System
+    attending_value: "CommitShrink v0.1 | License No. sha256:c0ffee…"
+  units:
+    minutes: "{v} minutes"
+    hours: "{v} hours"
+    days: "{v} days"
+    at_least_hours: "≥ {v} hours"
+  errors:
+    no_commits: >-
+      Sample size = 0. This center cannot render a diagnosis on behavior that
+      does not exist, but is willing to schedule a commendatory follow-up in
+      recognition of such restraint.
+    not_a_repo: >-
+      The specified path is not a git repository. This center accepts only
+      behavioral specimens under version control.
+    clone_failed: >-
+      Remote specimen acquisition failed: {error}. This center's sampling
+      range is bounded by network connectivity and repository accessibility;
+      this does not reflect on the subject.
+    author_required_for_remote: >-
+      Assessment of another party's repository requires that the subject
+      (author) be specified; this center does not presume sample ownership on
+      the subject's behalf.
+
+# ------------------------------------------------------------
+# Fixed boilerplate copy (report skeleton).
+# ------------------------------------------------------------
+boilerplate:
+  disclaimer: >-
+    This report is generated by an automated system from the git log. It does
+    not constitute medical advice, though it may constitute code-review
+    advice. All "conditions" herein are a parody of the quantitative-assessment
+    genre; certain diagnostic names are transplants of clinical
+    terminology into the git domain. The subject of this report is the commit
+    history, not any person, and it makes no reference to any real mental
+    disorder or to any person affected by one. Should this report cause
+    offense, please note that all clinical evidence was personally signed by
+    the subject, at the time of the offense (git commit). This report is
+    answerable only for the specimens submitted within the present assessment
+    period; behavior outside the sample — including evidence destroyed via
+    force-push — falls outside its scope. This center accepts only specimens
+    submitted voluntarily by the subject; any diagnosis derived from
+    specimens submitted on a colleague's behalf is void, and the act itself
+    constitutes a condition this center has not yet coded.
+  evidence_masking: >-
+    Words in cited specimens that match the GIT-19.3 lexicon retain their
+    first letter, with the remainder masked by ×; the citation is annotated
+    "(specimen partially redacted per this center's ethics protocol)."
+    Purely punctuational outbursts (e.g., consecutive exclamation marks)
+    carry no semantic content and are displayed verbatim.
+  footer: >-
+    Follow-up: automatically scheduled upon the next git push. | Attending
+    System CommitShrink v0.1
+  qa_note: >-
+    This report has passed dual review (by this system and a copy of this
+    system).
+  healthy_copy: Not detected. This center regards this with rare relief.
+  missing_data_copy: "Not detected (the subject declined to provide this specimen)."

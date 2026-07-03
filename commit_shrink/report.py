@@ -37,6 +37,8 @@ class ReportRenderer:
         self.bp = cfg["boilerplate"]
         self.meta = cfg["meta"]
         self.sev_labels = self.meta["severity_labels"]
+        # Separator between a bold label and its value (U+3000 in zh, ": " in en).
+        self.label_sep = self.rc["label_sep"]
 
     # -- helpers -------------------------------------------------------------
 
@@ -57,7 +59,7 @@ class ReportRenderer:
         if trend.decline_streak >= 2 and trend.extrapolated_week is not None:
             note += dl["decline_streak_fmt"].format(n=trend.decline_streak)
             note += dl["extrapolation_fmt"].format(week=trend.extrapolated_week)
-        return f"（{note}）"
+        return dl["trend_wrap_fmt"].format(note=note)
 
     def _evidence_lines(self, a: Assessment, d: Diagnosis) -> list[str]:
         lines = []
@@ -103,21 +105,21 @@ class ReportRenderer:
     def _diagnosis_section(self, console: Console, a: Assessment, trend: Trend | None = None) -> None:
         dl = self.rc["diagnosis_labels"]
         console.print(Rule(self.rc["sections"]["diagnosis"], align="left"))
-        console.print(f"[bold]{dl['chief_complaint']}[/bold]　{dl['chief_complaint_text']}")
+        console.print(f"[bold]{dl['chief_complaint']}[/bold]{self.label_sep}{dl['chief_complaint_text']}")
         console.print()
         if not a.diagnoses:
             console.print(dl["none_confirmed"])
             if a.notes:
-                console.print(f"[bold]{dl['other']}[/bold]　{'；'.join(a.notes)}")
+                console.print(f"[bold]{dl['other']}[/bold]{self.label_sep}{dl['list_join'].join(a.notes)}")
         else:
             primary, secondary, others = a.diagnoses[0], a.diagnoses[1:3], a.diagnoses[3:]
-            console.print(f"[bold]{dl['primary']}[/bold]　{self._diagnosis_line(primary)}")
+            console.print(f"[bold]{dl['primary']}[/bold]{self.label_sep}{self._diagnosis_line(primary)}")
             if secondary:
-                joined = " ｜ ".join(self._diagnosis_line(d) for d in secondary)
-                console.print(f"[bold]{dl['secondary']}[/bold]　{joined}")
+                joined = dl["secondary_join"].join(self._diagnosis_line(d) for d in secondary)
+                console.print(f"[bold]{dl['secondary']}[/bold]{self.label_sep}{joined}")
             other_parts = [f"{d.code} {d.name}" for d in others] + a.notes
             if other_parts:
-                console.print(f"[bold]{dl['other']}[/bold]　{'；'.join(other_parts)}")
+                console.print(f"[bold]{dl['other']}[/bold]{self.label_sep}{dl['list_join'].join(other_parts)}")
         console.print()
         composite = a.metrics["composite_score"]
         console.print(f"[bold]{dl['composite_fmt'].format(score=composite.display)}[/bold]")
@@ -132,7 +134,7 @@ class ReportRenderer:
         impression = dl["impression_fmt"].format(
             n=a.stats.total, night=a.stats.night_count, allcaps_note=allcaps_note
         )
-        console.print(f"[bold]{dl['impression']}[/bold]　{impression}")
+        console.print(f"[bold]{dl['impression']}[/bold]{self.label_sep}{impression}")
 
     def _metrics_section(self, console: Console, a: Assessment, trend: Trend | None = None) -> None:
         ml = self.rc["metrics_labels"]
@@ -175,7 +177,7 @@ class ReportRenderer:
             span = first.ts.strftime("%m-%d %H:%M")
             if last.ts != first.ts:
                 span += f" – {last.ts.strftime('%H:%M' if last.ts.date() == first.ts.date() else '%m-%d %H:%M')}"
-            console.print(f"[dim]{rl['time_span']}[/dim]　{span}")
+            console.print(f"[dim]{rl['time_span']}[/dim]{self.label_sep}{span}")
             for line in self._evidence_lines(a, d):
                 console.print(Text(f"    {line}", style="cyan"))
             evidence_masked = any(
@@ -183,7 +185,7 @@ class ReportRenderer:
                 for c in d.evidence[:MAX_EVIDENCE_LINES]
             )
             interpretation = d.text + (rl["masking_note"] if d.masked or evidence_masked else "")
-            console.print(f"[dim]{rl['interpretation']}[/dim]　{interpretation}")
+            console.print(f"[dim]{rl['interpretation']}[/dim]{self.label_sep}{interpretation}")
             console.print()
 
     def _ekg_section(self, console: Console, a: Assessment) -> None:
@@ -236,9 +238,9 @@ class ReportRenderer:
         console.print(Rule(self.rc["sections"]["disclaimer"], align="left"))
         console.print(Text(_copy(self.bp["disclaimer"])))
         console.print()
-        console.print(f"[bold]{fl['followup']}[/bold]　{fl['followup_value']}")
-        console.print(f"[bold]{fl['qa']}[/bold]　{self.bp['qa_note']}")
-        console.print(f"[bold]{fl['attending']}[/bold]　{fl['attending_value']}")
+        console.print(f"[bold]{fl['followup']}[/bold]{self.label_sep}{fl['followup_value']}")
+        console.print(f"[bold]{fl['qa']}[/bold]{self.label_sep}{self.bp['qa_note']}")
+        console.print(f"[bold]{fl['attending']}[/bold]{self.label_sep}{fl['attending_value']}")
         console.print()
 
     # -- entry point -----------------------------------------------------------

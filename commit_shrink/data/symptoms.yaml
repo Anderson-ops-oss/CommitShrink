@@ -476,6 +476,7 @@ boilerplate:
 report_copy:
   center_name: CommitShrink™ 开发者心理健康评估中心
   report_title_fmt: 周期性心理状态评估报告 · 第 {week} 评估周
+  label_sep: "　"   # 标签与取值之间的分隔（全角空格）；英文版覆盖为 ": "
   header_labels:
     patient: 受检者
     period: 评估周期
@@ -512,6 +513,9 @@ report_copy:
     impression: 临床印象
     impression_fmt: "受检者本周期共提交 {n} 次，其中 {night} 次发生于 00:00–05:59。{allcaps_note}"
     allcaps_note_fmt: "全部 {u} 次全大写提交均发生于深夜时段。"
+    secondary_join: " ｜ "      # 次诊断之间的分隔；英文版覆盖为 " | "
+    list_join: "；"            # notes / 其他关注状况列表的连接符；英文版覆盖为 "; "
+    trend_wrap_fmt: "（{note}）"  # 综合评分趋势备注的外框；英文版覆盖为 "({note})"
   metrics_labels:
     headers: [指标, 本期, 上期, 参考区间, 常模百分位]
     no_history: —

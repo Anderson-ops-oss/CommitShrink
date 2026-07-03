@@ -15,7 +15,7 @@ from rich.console import Console
 
 from . import history
 from .collector import NotARepoError
-from .pipeline import NoCommitsError, assess_repo, load_config
+from .pipeline import SUPPORTED_LANGS, NoCommitsError, assess_repo, load_config
 from .remote import (
     CloneError,
     RemoteAuthorRequiredError,
@@ -35,10 +35,15 @@ def assess(
         None, help="End of the assessment period (ISO datetime; defaults to now)."
     ),
     author: Optional[str] = typer.Option(None, help="Filter commits by author (git --author)."),
+    lang: str = typer.Option("en", help="Report language: 'en' or 'zh'."),
 ) -> None:
     """Generate a developer mental-health assessment from the repo's git log."""
     console = Console()
-    cfg = load_config()
+    if lang not in SUPPORTED_LANGS:
+        raise typer.BadParameter(
+            f"--lang must be one of {', '.join(SUPPORTED_LANGS)}, got {lang!r}"
+        )
+    cfg = load_config(lang)
     rc = cfg["report_copy"]
     try:
         end = datetime.fromisoformat(until).astimezone() if until else None
