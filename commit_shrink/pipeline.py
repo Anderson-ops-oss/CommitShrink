@@ -70,6 +70,7 @@ def assess_repo(
     until: datetime | None = None,
     author: str | None = None,
     cfg: dict | None = None,
+    techdebt_history: dict[str, str] | None = None,
 ) -> Assessment:
     cfg = cfg or load_config()
     start, end = compute_window(days, until)
@@ -95,7 +96,7 @@ def assess_repo(
     fix_pattern = diagnoser.re_fix.pattern
     metrics = compute_metrics(period, scores, stats, cfg["metrics"], fix_pattern)
     rewrites = count_rewrites(repo, start, end)
-    diagnoses, notes = diagnoser.run(period, window, scores, stats, rewrites)
+    diagnoses, notes = diagnoser.run(period, window, scores, stats, rewrites, techdebt_history)
     apply_diagnosis_burden(metrics, [d.severity for d in diagnoses])
 
     masked_subjects = {c.sha: diagnoser.mask(c.subject)[0] for c in period}

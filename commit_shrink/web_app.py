@@ -25,6 +25,7 @@ import streamlit as st
 from commit_shrink import history
 from commit_shrink.analyzer import collapse_cjk_whitespace
 from commit_shrink.collector import NotARepoError
+from commit_shrink.history import Trend
 from commit_shrink.pipeline import Assessment, NoCommitsError, assess_repo, load_config
 from commit_shrink.remote import (
     CloneError,
@@ -83,7 +84,9 @@ def render_header(assessment: Assessment, cfg: dict) -> None:
         st.markdown(f"**{label}**　{value}")
 
 
-def render_diagnosis_section(assessment: Assessment, cfg: dict, renderer: ReportRenderer) -> None:
+def render_diagnosis_section(
+    assessment: Assessment, cfg: dict, renderer: ReportRenderer, trend: Trend | None = None
+) -> None:
     rc = cfg["report_copy"]
     dl = rc["diagnosis_labels"]
 
@@ -107,6 +110,8 @@ def render_diagnosis_section(assessment: Assessment, cfg: dict, renderer: Report
 
     composite = assessment.metrics["composite_score"]
     st.markdown(f"**{dl['composite_fmt'].format(score=composite.display)}**")
+    if trend and trend.composite_delta is not None:
+        st.caption(renderer._trend_note(trend))
 
     allcaps_note = (
         dl["allcaps_note_fmt"].format(u=assessment.stats.uppercase_count)
@@ -119,13 +124,16 @@ def render_diagnosis_section(assessment: Assessment, cfg: dict, renderer: Report
     st.markdown(f"**{dl['impression']}**　{impression}")
 
 
-def render_metrics_section(assessment: Assessment, cfg: dict, renderer: ReportRenderer) -> None:
+def render_metrics_section(
+    assessment: Assessment, cfg: dict, renderer: ReportRenderer, trend: Trend | None = None
+) -> None:
     rc = cfg["report_copy"]
     bp = cfg["boilerplate"]
     ml = rc["metrics_labels"]
     headers = ml["headers"]
 
     st.subheader(rc["sections"]["metrics"])
+    previous = trend.metric_previous if trend else {}
     rows = []
     for mid in DISPLAY_METRIC_IDS:
         m = assessment.metrics[mid]
@@ -134,13 +142,14 @@ def render_metrics_section(assessment: Assessment, cfg: dict, renderer: ReportRe
             {
                 headers[0]: m.name,
                 headers[1]: value,
-                headers[2]: ml["no_history"],
+                headers[2]: previous.get(mid, ml["no_history"]),
                 headers[3]: m.reference,
                 headers[4]: renderer._percentile_text(m),
             }
         )
     st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption(ml["first_assessment_note"])
+    if not previous:
+        st.caption(ml["first_assessment_note"])
     st.caption(_copy(cfg["meta"]["norms_disclaimer"]))
     if any(assessment.metrics[mid].healthy for mid in DISPLAY_METRIC_IDS):
         st.caption(f"* {bp['healthy_copy']}")
@@ -268,13 +277,13 @@ def render_disclaimer_section(cfg: dict) -> None:
     st.markdown(f"**{fl['attending']}**　{fl['attending_value']}")
 
 
-def render_report(assessment: Assessment, cfg: dict) -> None:
+def render_report(assessment: Assessment, cfg: dict, trend: Trend | None = None) -> None:
     renderer = ReportRenderer(cfg)
     render_header(assessment, cfg)
     st.divider()
-    render_diagnosis_section(assessment, cfg, renderer)
+    render_diagnosis_section(assessment, cfg, renderer, trend)
     st.divider()
-    render_metrics_section(assessment, cfg, renderer)
+    render_metrics_section(assessment, cfg, renderer, trend)
     st.divider()
     render_records_section(assessment, cfg, renderer)
     st.divider()
@@ -289,6 +298,8 @@ if "cfg" not in st.session_state:
     st.session_state.cfg = load_config()
 if "assessment" not in st.session_state:
     st.session_state.assessment = None
+if "trend" not in st.session_state:
+    st.session_state.trend = None
 
 cfg = st.session_state.cfg
 rc = cfg["report_copy"]
@@ -324,15 +335,17 @@ if submitted:
             with st.spinner("Reading git log and generating the assessment..."):
                 try:
                     with local_repo(path_input, days=int(days_input), until=until) as repo_path:
+                        ctx = history.load_context([repo_path])
                         assessment = assess_repo(
                             repo_path,
                             days=int(days_input),
                             until=until,
                             author=author,
                             cfg=cfg,
+                            techdebt_history=ctx.techdebt_index,
                         )
                         source = "remote" if is_remote_spec(path_input) else "local"
-                        history.record_assessment(assessment, [repo_path], source=source)
+                        trend = history.finalize(ctx, assessment, [repo_path], source=source)
                 except CloneError as e:
                     st.error(rc["errors"]["clone_failed"].format(error=str(e)))
                 except NotARepoError:
@@ -343,7 +356,9 @@ if submitted:
                     st.error(str(e))
                 else:
                     st.session_state.assessment = assessment
+                    st.session_state.trend = trend
 
 assessment = st.session_state.assessment
+trend = st.session_state.trend
 if assessment is not None:
-    render_report(assessment, cfg)
+    render_report(assessment, cfg, trend)

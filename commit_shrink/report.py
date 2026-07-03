@@ -16,6 +16,7 @@ from rich.text import Text
 
 from .analyzer import collapse_cjk_whitespace
 from .diagnoser import Diagnosis
+from .history import Trend
 from .pipeline import Assessment
 
 
@@ -49,6 +50,14 @@ class ReportRenderer:
     def _diagnosis_line(self, d: Diagnosis) -> str:
         sev = self.rc["diagnosis_labels"]["severity_fmt"].format(label=self.sev_labels[d.severity])
         return f"{d.code} {d.name}{sev}"
+
+    def _trend_note(self, trend: Trend) -> str:
+        dl = self.rc["diagnosis_labels"]
+        note = dl["period_delta_fmt"].format(delta=f"{trend.composite_delta:+d}")
+        if trend.decline_streak >= 2 and trend.extrapolated_week is not None:
+            note += dl["decline_streak_fmt"].format(n=trend.decline_streak)
+            note += dl["extrapolation_fmt"].format(week=trend.extrapolated_week)
+        return f"（{note}）"
 
     def _evidence_lines(self, a: Assessment, d: Diagnosis) -> list[str]:
         lines = []
@@ -91,7 +100,7 @@ class ReportRenderer:
         )
         console.print(grid)
 
-    def _diagnosis_section(self, console: Console, a: Assessment) -> None:
+    def _diagnosis_section(self, console: Console, a: Assessment, trend: Trend | None = None) -> None:
         dl = self.rc["diagnosis_labels"]
         console.print(Rule(self.rc["sections"]["diagnosis"], align="left"))
         console.print(f"[bold]{dl['chief_complaint']}[/bold]　{dl['chief_complaint_text']}")
@@ -112,6 +121,8 @@ class ReportRenderer:
         console.print()
         composite = a.metrics["composite_score"]
         console.print(f"[bold]{dl['composite_fmt'].format(score=composite.display)}[/bold]")
+        if trend and trend.composite_delta is not None:
+            console.print(self._trend_note(trend))
         console.print()
         allcaps_note = (
             dl["allcaps_note_fmt"].format(u=a.stats.uppercase_count)
@@ -123,7 +134,7 @@ class ReportRenderer:
         )
         console.print(f"[bold]{dl['impression']}[/bold]　{impression}")
 
-    def _metrics_section(self, console: Console, a: Assessment) -> None:
+    def _metrics_section(self, console: Console, a: Assessment, trend: Trend | None = None) -> None:
         ml = self.rc["metrics_labels"]
         console.print(Rule(self.rc["sections"]["metrics"], align="left"))
         table = Table(show_edge=False, pad_edge=False)
@@ -136,14 +147,17 @@ class ReportRenderer:
             "fix_loop_density",
             "alexithymia_index",
         ]
+        previous = trend.metric_previous if trend else {}
         for mid in display_ids:
             m = a.metrics[mid]
             value = m.display
             if m.healthy:
                 value = f"{m.display}*"
-            table.add_row(m.name, f"[bold]{value}[/bold]", ml["no_history"], m.reference, self._percentile_text(m))
+            prev_text = previous.get(mid, ml["no_history"])
+            table.add_row(m.name, f"[bold]{value}[/bold]", prev_text, m.reference, self._percentile_text(m))
         console.print(table)
-        console.print(Text(ml["first_assessment_note"], style="dim"))
+        if not previous:
+            console.print(Text(ml["first_assessment_note"], style="dim"))
         console.print(Text(_copy(self.meta["norms_disclaimer"]), style="dim"))
         if any(a.metrics[mid].healthy for mid in display_ids):
             console.print(Text(f"* {self.bp['healthy_copy']}", style="dim"))
@@ -229,10 +243,10 @@ class ReportRenderer:
 
     # -- entry point -----------------------------------------------------------
 
-    def render(self, console: Console, a: Assessment) -> None:
+    def render(self, console: Console, a: Assessment, trend: Trend | None = None) -> None:
         self._header(console, a)
-        self._diagnosis_section(console, a)
-        self._metrics_section(console, a)
+        self._diagnosis_section(console, a, trend)
+        self._metrics_section(console, a, trend)
         self._records_section(console, a)
         self._ekg_section(console, a)
         self._prescriptions_section(console, a)

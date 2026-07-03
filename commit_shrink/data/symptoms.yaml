@@ -375,11 +375,15 @@ symptoms:
       I: 1–2 处
       II: 3–5 处
       III: ≥6 处
-      IV: 同一命中文案（归一化后相同 message）间隔 ≥90 天再次出现   # 需跨周期缓存，v0.2；v0.1 封顶 III 级
+      IV: 同一命中文案（归一化后相同 message）间隔 ≥90 天再次出现   # 由 history.py 的跨周期缓存判定
     diagnosis: >-
       检出 {n} 处"临时"方案。本中心对既往"临时"方案的生存分析显示：
       中位生存期未达到（随访期内无一例结案）。
-      受检者已与技术债建立长期依恋关系，并开始为其辩护。
+      受检者已与技术债建立长期依恋关系，并开始为其辩护。{recurrence_note}
+    diagnosis_notes:
+      recurrence_note: >-
+        其中一处已在首次记录后间隔 90 天以上原样复发——本中心认为这已不属于"债务"关系，
+        应重新归类为长期共同居住关系。
     prescription: 每个"先这样"须附带 issue 编号。否则它不是技术债，是技术遗产。
 
   - id: time_perception
@@ -502,6 +506,9 @@ report_copy:
     none_confirmed: 本周期未检出任何病症。本中心对此表示罕见的欣慰，并建议复查。
     severity_fmt: "（{label}）"
     composite_fmt: "本周期心理健康综合评分：{score} / 100"
+    period_delta_fmt: 较上周 {delta} 分
+    decline_streak_fmt: "，连续第 {n} 周下降。"
+    extrapolation_fmt: 按当前斜率外推，预计第 {week} 评估周触及本量表测量下限（0 分）。
     impression: 临床印象
     impression_fmt: "受检者本周期共提交 {n} 次，其中 {night} 次发生于 00:00–05:59。{allcaps_note}"
     allcaps_note_fmt: "全部 {u} 次全大写提交均发生于深夜时段。"

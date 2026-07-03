@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Callable
 
 from .analyzer import (
@@ -25,6 +25,7 @@ from .analyzer import (
     is_low_info,
     is_scream,
     normalize_message,
+    techdebt_hash,
 )
 from .models import Commit
 
@@ -435,13 +436,41 @@ class Diagnoser:
         text = self.spec["magical_thinking"]["diagnosis"].format(n=n, evidence=evidence_text)
         return self._diag("magical_thinking", sev, text, hits, masked=masked)
 
-    def _stockholm(self, period: list[Commit]) -> Diagnosis | None:
+    def _techdebt_recurrence(
+        self, hits: list[Commit], techdebt_history: dict[str, str] | None
+    ) -> Commit | None:
+        """A hit whose normalized message first appeared >=90 days ago,
+        per the cross-period cache (history.py). None when there's no cache
+        yet or no hit qualifies -- severity then caps at III, as before the
+        cache existed.
+        """
+        if not techdebt_history:
+            return None
+        for c in hits:
+            first_seen = techdebt_history.get(techdebt_hash(normalize_message(c.message)))
+            if first_seen and c.ts - datetime.fromisoformat(first_seen) >= timedelta(days=90):
+                return c
+        return None
+
+    def _stockholm(
+        self, period: list[Commit], techdebt_history: dict[str, str] | None
+    ) -> Diagnosis | None:
         hits = [c for c in period if self.re_debt.search(c.message)]
         if not hits:
             return None
         n = len(hits)
-        sev = "III" if n >= 6 else "II" if n >= 3 else "I"  # IV needs cross-period cache (v0.2)
-        text = self.spec["stockholm_techdebt"]["diagnosis"].format(n=n)
+        recurring = self._techdebt_recurrence(hits, techdebt_history)
+        if recurring is not None:
+            sev = "IV"
+        elif n >= 6:
+            sev = "III"
+        elif n >= 3:
+            sev = "II"
+        else:
+            sev = "I"
+        spec = self.spec["stockholm_techdebt"]
+        note = spec["diagnosis_notes"]["recurrence_note"] if recurring is not None else ""
+        text = spec["diagnosis"].format(n=n, recurrence_note=note)
         return self._diag("stockholm_techdebt", sev, text, hits)
 
     def _time_perception(self, period: list[Commit], window: list[Commit]) -> Diagnosis | None:
@@ -492,6 +521,7 @@ class Diagnoser:
         scores: dict[str, float],
         stats: PeriodStats,
         rewrites: int | None,
+        techdebt_history: dict[str, str] | None = None,
     ) -> tuple[list[Diagnosis], list[str]]:
         notes: list[str] = []
         segments = self._segments(period)
@@ -510,7 +540,7 @@ class Diagnoser:
             lambda: self._binge(period, window),
             lambda: self._commitment(period, stats),
             lambda: self._magical(period, scores),
-            lambda: self._stockholm(period),
+            lambda: self._stockholm(period, techdebt_history),
             lambda: self._time_perception(period, window),  # last: reads chain shas
         ]
         diagnoses = [d for d in (fn() for fn in detectors) if d is not None]

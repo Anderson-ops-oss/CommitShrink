@@ -12,6 +12,7 @@ commit_shrink/data/symptoms.yaml. Scoring precedence (see lexicon_patch.note):
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from dataclasses import dataclass
@@ -57,6 +58,18 @@ def normalize_message(message: str) -> str:
 def is_low_info(message: str, stoplist: list[str]) -> bool:
     norm = normalize_message(message)
     return norm in {str(s).lower() for s in stoplist} or len(norm) < 4
+
+
+def techdebt_hash(normalized_message: str) -> str:
+    """Compact identity for a normalized "temporary fix" message.
+
+    Used by history.py's cross-period cache to notice the same fix recurring
+    >=90 days later (GIT-77.7 grade IV) without storing the raw commit text
+    in the cache indefinitely. Lives here rather than in history.py so
+    diagnoser.py can compute it too without an import cycle (history.py
+    depends on pipeline.py, which depends on diagnoser.py).
+    """
+    return hashlib.sha256(normalized_message.encode()).hexdigest()[:16]
 
 
 def is_scream(message: str, stoplist: list[str]) -> bool:

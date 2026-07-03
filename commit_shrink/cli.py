@@ -51,9 +51,17 @@ def assess(
         raise typer.Exit(code=2)
     try:
         with local_repo(path, days=days, until=end) as repo_path:
-            assessment = assess_repo(repo_path, days=days, until=end, author=author, cfg=cfg)
+            ctx = history.load_context([repo_path])
+            assessment = assess_repo(
+                repo_path,
+                days=days,
+                until=end,
+                author=author,
+                cfg=cfg,
+                techdebt_history=ctx.techdebt_index,
+            )
             source = "remote" if is_remote_spec(path) else "local"
-            history.record_assessment(assessment, [repo_path], source=source)
+            trend = history.finalize(ctx, assessment, [repo_path], source=source)
     except CloneError as e:
         console.print(rc["errors"]["clone_failed"].format(error=str(e)))
         raise typer.Exit(code=2)
@@ -67,7 +75,7 @@ def assess(
         # Unexpected git failure: show the message, never a raw traceback.
         console.print(str(e))
         raise typer.Exit(code=2)
-    ReportRenderer(cfg).render(console, assessment)
+    ReportRenderer(cfg).render(console, assessment, trend)
 
 
 def main() -> None:

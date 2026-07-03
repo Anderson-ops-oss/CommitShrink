@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 import pytest
 from rich.console import Console
 
-from commit_shrink.analyzer import SentimentScorer
+from commit_shrink.analyzer import SentimentScorer, normalize_message, techdebt_hash
+from commit_shrink.history import Trend
 from commit_shrink.pipeline import NoCommitsError, assess_repo, load_config
 from commit_shrink.report import ReportRenderer
 
@@ -94,8 +95,50 @@ class TestSymptoms:
         assert by_id(assessment, "boundary_dissolution") is not None
 
     def test_stockholm_techdebt(self, assessment):
+        """With no cross-period history supplied, severity is graded purely
+        by this period's hit count and caps out below IV."""
         d = by_id(assessment, "stockholm_techdebt")
         assert d is not None
+        assert d.severity == "I"
+
+
+class TestStockholmRecurrence:
+    """GIT-77.7 grade IV: the same normalized 'temporary fix' message
+    reappearing >=90 days after history.py first saw it (symptoms.yaml,
+    stockholm_techdebt.severity.IV).
+    """
+
+    def _techdebt_hit(self, fixture_repo):
+        repo, _start, period_end = fixture_repo
+        baseline = assess_repo(repo, days=7, until=period_end)
+        hit = next(c for c in baseline.commits if "temporary workaround" in c.message)
+        return repo, period_end, hit
+
+    def test_grade_iv_when_seen_90_days_ago(self, fixture_repo):
+        repo, period_end, hit = self._techdebt_hit(fixture_repo)
+        techdebt_history = {
+            techdebt_hash(normalize_message(hit.message)): (hit.ts - timedelta(days=91)).isoformat()
+        }
+        recurring = assess_repo(repo, days=7, until=period_end, techdebt_history=techdebt_history)
+        d = by_id(recurring, "stockholm_techdebt")
+        assert d.severity == "IV"
+
+    def test_stays_capped_under_90_days(self, fixture_repo):
+        repo, period_end, hit = self._techdebt_hit(fixture_repo)
+        techdebt_history = {
+            techdebt_hash(normalize_message(hit.message)): (hit.ts - timedelta(days=10)).isoformat()
+        }
+        recent = assess_repo(repo, days=7, until=period_end, techdebt_history=techdebt_history)
+        d = by_id(recent, "stockholm_techdebt")
+        assert d.severity == "I"
+
+    def test_unrelated_hash_does_not_trigger(self, fixture_repo):
+        repo, period_end, hit = self._techdebt_hit(fixture_repo)
+        techdebt_history = {
+            techdebt_hash("some other message entirely"): (hit.ts - timedelta(days=200)).isoformat()
+        }
+        unaffected = assess_repo(repo, days=7, until=period_end, techdebt_history=techdebt_history)
+        d = by_id(unaffected, "stockholm_techdebt")
         assert d.severity == "I"
 
 
@@ -221,10 +264,10 @@ class TestWindowAndEdges:
 
 
 class TestReport:
-    def _render(self, assessment) -> str:
+    def _render(self, assessment, trend=None) -> str:
         cfg = load_config()
         console = Console(record=True, width=80)
-        ReportRenderer(cfg).render(console, assessment)
+        ReportRenderer(cfg).render(console, assessment, trend)
         return console.export_text()
 
     def test_all_sections_present(self, assessment):
@@ -232,6 +275,54 @@ class TestReport:
         cfg = load_config()
         for title in cfg["report_copy"]["sections"].values():
             assert title in out
+
+    def test_no_trend_shows_first_assessment_placeholder(self, assessment):
+        """Unchanged default: no Trend passed -> same output as before
+        cross-period history existed (plan-commit-shrink.md: additive only).
+        """
+        out = self._render(assessment)
+        assert "首次评估，无历史对照" in out
+        assert "较上周" not in out
+
+    def test_trend_fills_previous_period_column(self, assessment):
+        trend = Trend(
+            metric_previous={"night_despair_index": "6.1"},
+            composite_delta=None,
+            decline_streak=0,
+            extrapolated_week=None,
+        )
+        out = self._render(assessment, trend)
+        assert "6.1" in out
+        assert "首次评估，无历史对照" not in out
+
+    def test_trend_streak_matches_golden_sample_wording(self, assessment):
+        """Reproduces docs/report-sample.md's own internally-consistent
+        numbers: 52 -> 43 -> 34 is a 3-period decline at slope -9, which
+        projects to hit 0 four periods out (ceil(34/9) = 4)."""
+        week = assessment.period_end.isocalendar().week
+        trend = Trend(
+            metric_previous={},
+            composite_delta=-9,
+            decline_streak=3,
+            extrapolated_week=week + 4,
+        )
+        # Collapse Rich's 80-column line wrapping before matching a phrase
+        # that could legally fall across a wrap boundary at that width.
+        out = " ".join(self._render(assessment, trend).split())
+        assert "较上周 -9 分" in out
+        assert "连续第 3 周下降" in out
+        assert f"预计第 {week + 4} 评估周" in out
+
+    def test_trend_without_streak_omits_extrapolation(self, assessment):
+        """A single prior period (streak=1, e.g. an improvement) reports the
+        delta but not a decline streak that doesn't actually exist."""
+        trend = Trend(
+            metric_previous={}, composite_delta=5, decline_streak=1, extrapolated_week=None
+        )
+        out = self._render(assessment, trend)
+        assert "较上周 +5 分" in out
+        assert "连续第" not in out
+        assert "外推" not in out
 
     def test_evidence_masked(self, assessment):
         """Safety: outburst lexicon hits never appear unmasked in the report.

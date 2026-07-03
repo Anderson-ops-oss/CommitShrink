@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import math
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from commit_shrink.collector import remote_origin_url, root_commit_shas
+from commit_shrink.pipeline import assess_repo
 from commit_shrink.history import (
+    NO_TREND,
     FingerprintError,
+    HistoryEntry,
     append_entry,
+    build_techdebt_index,
+    compute_trend,
     entry_from_assessment,
+    finalize,
+    load_context,
     load_history,
     record_assessment,
     repo_fingerprint,
@@ -181,3 +192,186 @@ class TestRecordAssessment:
         target = tmp_path / "history.jsonl"
         record_assessment(assessment, [empty], source="local", path=target)
         assert not target.exists()
+
+    def test_load_history_without_patient_filter_returns_all_patients(self, tmp_path, assessment):
+        """Used by the GIT-77.7 recurrence check, which is repo-scoped, not
+        patient-scoped -- the same 'temporary fix' text matters regardless
+        of who committed it."""
+        target = tmp_path / "history.jsonl"
+        mine = entry_from_assessment(assessment, "fp1", "local")
+        append_entry(mine, path=target)
+        theirs = entry_from_assessment(assessment, "fp1", "local")
+        theirs.patient_email = "someone-else@example.com"
+        theirs.period_end = "2026-05-01T23:59:00+00:00"
+        append_entry(theirs, path=target)
+
+        loaded = load_history(None, "fp1", path=target)
+        assert {e.patient_email for e in loaded} == {mine.patient_email, "someone-else@example.com"}
+
+    def test_dedup_keys_on_patient_and_period_not_period_alone(self, tmp_path, assessment):
+        """Two different patients recording the same period_end for the same
+        repo must not collapse into a single entry."""
+        target = tmp_path / "history.jsonl"
+        a = entry_from_assessment(assessment, "fp1", "local")
+        b = entry_from_assessment(assessment, "fp1", "local")
+        b.patient_email = "someone-else@example.com"
+        append_entry(a, path=target)
+        append_entry(b, path=target)
+
+        loaded = load_history(None, "fp1", path=target)
+        assert len(loaded) == 2
+
+
+def _entry(period_end: str, composite_display: str, techdebt_hashes=None, patient="dev@example.com"):
+    return HistoryEntry(
+        patient_email=patient,
+        repo_fingerprint="fp1",
+        source="local",
+        period_end=period_end,
+        recorded_at=period_end,
+        metrics={
+            "night_despair_index": {"value": 1.0, "display": "1.0"},
+            "composite_score": {"value": float(composite_display), "display": composite_display},
+        },
+        diagnoses=[],
+        techdebt_hashes=techdebt_hashes or [],
+    )
+
+
+class TestBuildTechdebtIndex:
+    def test_picks_earliest_period_per_hash(self):
+        entries = [
+            _entry("2026-03-01T23:59:00+00:00", "50", techdebt_hashes=["h1"]),
+            _entry("2026-01-01T23:59:00+00:00", "60", techdebt_hashes=["h1", "h2"]),
+        ]
+        index = build_techdebt_index(entries)
+        assert index["h1"] == "2026-01-01T23:59:00+00:00"
+        assert index["h2"] == "2026-01-01T23:59:00+00:00"
+
+    def test_empty_entries_yield_empty_index(self):
+        assert build_techdebt_index([]) == {}
+
+
+def _fake_assessment(period_end: datetime, composite_display: str):
+    """A minimal stand-in for Assessment: compute_trend only ever reads
+    `.period_end` and `.metrics["composite_score"].display` off its input,
+    so this avoids mutating the real (session-scoped, shared-across-tests)
+    `assessment` fixture just to exercise different composite values.
+    """
+    return SimpleNamespace(
+        period_end=period_end,
+        metrics={"composite_score": SimpleNamespace(display=composite_display)},
+    )
+
+
+class TestComputeTrend:
+    def test_no_prior_history_returns_no_trend(self, assessment):
+        assert compute_trend(assessment, []) is NO_TREND
+
+    def test_entry_for_the_same_period_is_excluded(self, assessment):
+        """A rerun of the current period must not be compared to itself."""
+        same_period = _entry(assessment.period_end.isoformat(), "999")
+        assert compute_trend(assessment, [same_period]) is NO_TREND
+
+    def test_single_prior_period_improving_has_no_streak(self):
+        end = datetime(2026, 6, 28, 23, 59, tzinfo=timezone.utc)
+        current = _fake_assessment(end, "40")
+        prior = _entry((end - timedelta(days=7)).isoformat(), "35")
+        trend = compute_trend(current, [prior])
+        assert trend.composite_delta == 5
+        assert trend.decline_streak == 1
+        assert trend.extrapolated_week is None
+
+    def test_single_prior_period_declining_is_streak_two(self):
+        end = datetime(2026, 6, 28, 23, 59, tzinfo=timezone.utc)
+        current = _fake_assessment(end, "34")
+        prior = _entry((end - timedelta(days=7)).isoformat(), "39")
+        trend = compute_trend(current, [prior])
+        assert trend.composite_delta == -5
+        assert trend.decline_streak == 2
+        assert trend.extrapolated_week == end.isocalendar().week + math.ceil(34 / 5)
+
+    def test_golden_sample_streak_and_extrapolation(self):
+        """Reproduces docs/report-sample.md: composite 52 -> 43 -> 34, a
+        3-period decline at slope -9, projected to hit 0 in 4 more periods."""
+        end = datetime(2026, 6, 28, 23, 59, tzinfo=timezone.utc)
+        current = _fake_assessment(end, "34")
+        prior = [
+            _entry((end - timedelta(days=14)).isoformat(), "52"),
+            _entry((end - timedelta(days=7)).isoformat(), "43"),
+        ]
+        trend = compute_trend(current, prior)
+        assert trend.composite_delta == -9
+        assert trend.decline_streak == 3
+        assert trend.extrapolated_week == end.isocalendar().week + 4
+
+    def test_streak_stops_at_first_non_decline_scanning_backward(self):
+        end = datetime(2026, 6, 28, 23, 59, tzinfo=timezone.utc)
+        current = _fake_assessment(end, "34")
+        prior = [
+            _entry((end - timedelta(days=21)).isoformat(), "30"),
+            _entry((end - timedelta(days=14)).isoformat(), "50"),
+            _entry((end - timedelta(days=7)).isoformat(), "43"),
+        ]
+        trend = compute_trend(current, prior)
+        # 30 -> 50 rises, breaking the decline before it reaches the 30 entry.
+        assert trend.decline_streak == 3
+
+    def test_metric_previous_reads_from_the_latest_prior_entry(self):
+        end = datetime(2026, 6, 28, 23, 59, tzinfo=timezone.utc)
+        current = _fake_assessment(end, "34")
+        prior = [
+            _entry((end - timedelta(days=14)).isoformat(), "52"),
+            _entry((end - timedelta(days=7)).isoformat(), "43"),
+        ]
+        trend = compute_trend(current, prior)
+        assert trend.metric_previous["night_despair_index"] == "1.0"
+
+
+class TestLoadContextAndFinalize:
+    def test_load_context_on_fresh_repo_has_no_techdebt_yet(self, tmp_path, fixture_repo):
+        repo, _start, _period_end = fixture_repo
+        ctx = load_context([repo], path=tmp_path / "history.jsonl")
+        assert ctx.fingerprint is not None
+        assert ctx.techdebt_index == {}
+
+    def test_load_context_degrades_on_unidentifiable_repo(self, tmp_path):
+        empty = tmp_path / "not-a-repo"
+        empty.mkdir()
+        ctx = load_context([empty], path=tmp_path / "history.jsonl")
+        assert ctx.fingerprint is None
+        assert ctx.techdebt_index == {}
+
+    def test_finalize_with_no_fingerprint_returns_no_trend_and_writes_nothing(
+        self, tmp_path, assessment
+    ):
+        empty = tmp_path / "not-a-repo"
+        empty.mkdir()
+        ctx = load_context([empty], path=tmp_path / "history.jsonl")
+        target = tmp_path / "history.jsonl"
+        trend = finalize(ctx, assessment, [empty], source="local", path=target)
+        assert trend is NO_TREND
+        assert not target.exists()
+
+    def test_finalize_records_and_next_run_sees_the_trend(self, tmp_path, fixture_repo):
+        """End-to-end: first run has no history; recording it makes a second
+        run for a later period see it as the 'previous' period. The fixture
+        repo only has one week of commits, so the "later" run is simulated
+        by replacing a1's period_end rather than re-collecting from git --
+        compute_trend's actual math is already covered by TestComputeTrend;
+        this test is only about the load_context/finalize wiring.
+        """
+        repo, _start, period_end = fixture_repo
+        target = tmp_path / "history.jsonl"
+
+        ctx1 = load_context([repo], path=target)
+        a1 = assess_repo(repo, days=7, until=period_end, techdebt_history=ctx1.techdebt_index)
+        trend1 = finalize(ctx1, a1, [repo], source="local", path=target)
+        assert trend1 is NO_TREND
+        assert target.exists()
+
+        a2 = dataclasses.replace(a1, period_end=period_end + timedelta(days=7))
+        ctx2 = load_context([repo], path=target)
+        trend2 = finalize(ctx2, a2, [repo], source="local", path=target)
+        assert trend2.composite_delta == 0
+        assert trend2.metric_previous["composite_score"] == a1.metrics["composite_score"].display
