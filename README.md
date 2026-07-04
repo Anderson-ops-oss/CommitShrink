@@ -92,9 +92,14 @@ commit-shrink . --card card.html             # also write a shareable HTML summa
 # Assess a public repository without cloning it yourself first:
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
 commit-shrink https://github.com/owner/repo --author dev@example.com
+
+# Assess a whole GitHub user — all their public repos, as one merged timeline:
+commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
 ```
 
 Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone URL) are cloned into a temporary directory as a *blobless partial clone* (full history metadata; file contents are fetched lazily, and only for the assessment window), then discarded afterward — nothing is left on disk. `--author` is required for a remote repository: without it there's no principled way to guess which contributor you meant to assess, so CommitShrink refuses to just pick whoever committed the most that week.
+
+A `gh-user:<name>` spec goes one step further: it discovers the user's public repositories (owned, most-recently-pushed first), assesses them all as a *single merged commit timeline*, and anchors the cross-run trend to the person rather than any one repo — so the trend survives the user adding or archiving repos. `--author` is required here too (pass an email); the scope is the user's own public repos with activity in the window. Assessing repos they contributed to but don't own, and private repos, are out of scope for now.
 
 Want to see it run without risking your own commit history? Generate a clinically rich demo repository and point the tool at it:
 

@@ -90,9 +90,14 @@ commit-shrink . --card card.html             # 额外写出一张可分享的 HT
 # 评估一个公开仓库，不用自己先手动 clone：
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
 commit-shrink https://github.com/owner/repo --author dev@example.com
+
+# 评估某个 GitHub 用户的全部公开仓库，合并为一条时间线：
+commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
 ```
 
 远程地址（`github:owner/repo` 简写，或任意 `https://`/`git@` clone 地址）会以 *blobless 部分克隆* 的方式拉到一个临时目录（保留完整历史元数据，文件内容仅在评估周期内按需惰性拉取），用完即删，不留痕迹。评估远程仓库时必须指定 `--author`——没有这个参数，工具没有任何合理依据去猜"你想看的是哪位贡献者"，所以干脆拒绝擅自挑一个提交最多的人当受检者。
+
+`gh-user:<用户名>` 更进一步：它会发现该用户的公开仓库（owned，按最近推送排序），把它们**合并成一条提交时间线**一起评估，并让跨周趋势锚定到"人"而非某个仓库——这样用户新增或归档仓库时趋势也不会断。同样必须指定 `--author`（填邮箱）；范围是该用户在窗口内有活动的自有公开仓库。评估他"贡献过但不拥有"的仓库、以及私有仓库，暂不在范围内。
 
 不想拿自己的提交历史冒险？生成一个"病情丰富"的演示仓库直接体验：
 

@@ -1,8 +1,9 @@
 """Command-line entry point: `commit-shrink [PATH]`.
 
-PATH accepts a local filesystem path, or a remote spec (a URL, or
+PATH accepts a local filesystem path; a remote spec (a URL, or
 github:owner/repo) to assess a public repository without cloning it
-yourself first -- see commit_shrink/remote.py.
+yourself first; or gh-user:owner to assess all of a user's public repos as
+one merged timeline -- see commit_shrink/remote.py and commit_shrink/run.py.
 """
 
 from __future__ import annotations
@@ -28,7 +29,9 @@ from .waiting import run_with_rotating_messages
 
 def assess(
     path: str = typer.Argument(
-        ".", help="Local git repo path, or a remote spec (URL / github:owner/repo)."
+        ".",
+        help="Local path, a remote spec (URL / github:owner/repo), or gh-user:owner "
+        "to assess all of a user's public repos as one merged timeline.",
     ),
     days: int = typer.Option(7, help="Length of the assessment period in days."),
     until: Optional[str] = typer.Option(

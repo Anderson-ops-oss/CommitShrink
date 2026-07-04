@@ -333,11 +333,14 @@ st.title(rc["center_name"])
 
 with st.form("assessment_form"):
     path_input = st.text_input(
-        "Repository path, or a public repo URL / github:owner/repo", value="."
+        "Repository path, a public repo URL / github:owner/repo, or a whole user gh-user:owner",
+        value=".",
+        help="e.g.  .   •   github:torvalds/linux   •   gh-user:octocat "
+        "(assesses all of a user's public repos as one timeline)",
     )
     days_input = st.number_input("Assessment window (days)", min_value=1, value=7, step=1)
     author_input = st.text_input(
-        "Author filter (required for a remote repo; matches git --author)", value=""
+        "Author filter (required for a remote repo or gh-user:; matches git --author)", value=""
     )
     until_input = st.text_input(
         "End of assessment period (optional, ISO datetime; defaults to now)", value=""
