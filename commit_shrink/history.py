@@ -1,8 +1,8 @@
 """Cross-period history: a local, append-only record of past assessments.
 
 Storage lives in a user-level cache directory, not inside the assessed repo
-(see plan-commit-shrink.md, Day 3-4 addendum, section 1) -- the history is
-about a *person*, not a property of whichever checkout happens to be on disk,
+-- the history is about a *person*, not a property of whichever checkout
+happens to be on disk,
 and a remote assessment has no repo of the user's own to write into anyway.
 
 Keying is (patient_email, repo_fingerprint). `repo_fingerprint` takes a list

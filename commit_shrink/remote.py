@@ -1,8 +1,8 @@
 """Resolve a repository "spec" -- a local path or a remote URL/shorthand --
 into a local filesystem path that collector.collect() can read unmodified.
 
-This is the RepoSource seam from plan-commit-shrink.md's Day 3-4 addendum:
-analyzer.py, diagnoser.py, pipeline.py, and report.py stay completely
+This is the RepoSource seam: analyzer.py, diagnoser.py, pipeline.py, and
+report.py stay completely
 unaware that a repository might not already be on disk. Only this module,
 and the small dispatch in cli.py/web_app.py that decides whether to use it,
 know about URLs at all.

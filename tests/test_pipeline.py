@@ -279,7 +279,7 @@ class TestReport:
 
     def test_no_trend_shows_first_assessment_placeholder(self, assessment):
         """Unchanged default: no Trend passed -> same output as before
-        cross-period history existed (plan-commit-shrink.md: additive only).
+        cross-period history existed (the feature was designed to be additive).
         """
         out = self._render(assessment)
         assert "首次评估，无历史对照" in out
