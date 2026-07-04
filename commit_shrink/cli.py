@@ -7,6 +7,7 @@ yourself first -- see commit_shrink/remote.py.
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -101,7 +102,27 @@ def assess(
         console.print(rc["card"]["saved_fmt"].format(path=card))
 
 
+def _ensure_utf8_output() -> None:
+    """Force UTF-8 on a redirected/piped stdout+stderr.
+
+    When output is not a terminal, Python encodes it with the locale codepage
+    (cp1252 on a typical Windows box), which cannot represent the report's
+    Unicode -- the Rich status spinner (Braille), box-drawing, "≥", or CJK
+    commit evidence -- and raises UnicodeEncodeError mid-render. A real
+    terminal is left untouched (Rich handles its own console); errors="replace"
+    is a last-resort guard so output degrades rather than crashing.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        try:
+            if reconfigure is not None and not stream.isatty():
+                reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+
 def main() -> None:
+    _ensure_utf8_output()
     typer.run(assess)
 
 
