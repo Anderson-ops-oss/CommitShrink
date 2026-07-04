@@ -32,6 +32,11 @@ PRETTY = f"{RECORD_SEP}%H{FIELD_SEP}%an{FIELD_SEP}%ae{FIELD_SEP}%ad{FIELD_SEP}%P
 # a rebase; a month of slack covers ordinary workflows.
 GIT_WINDOW_SLACK = timedelta(days=30)
 
+# One `git fetch` per this many object ids, to keep the command line well
+# under OS argument-length limits when a window touches many files.
+BACKFILL_CHUNK = 400
+BACKFILL_TIMEOUT_SECONDS = 60
+
 _NUMSTAT_RE = re.compile(r"^(\d+|-)\t(\d+|-)\t(.+)$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
 _RENAME_BRACES_RE = re.compile(
@@ -156,6 +161,66 @@ def collect(
     commits = [c for c in commits if since <= c.ts <= until]
     commits.sort(key=lambda c: c.ts)
     return commits
+
+
+def backfill_window_blobs(repo: Path, since: datetime, author: str | None = None) -> None:
+    """Pre-fetch, in bulk, the blobs collect() will need for its --numstat
+    diffs over the same window.
+
+    On a blobless partial clone (see remote.local_repo) `git log --numstat`
+    would otherwise lazily fetch each commit's diff blobs one network
+    round-trip at a time. Instead we list the needed blob object ids with a
+    tree-level `git log --raw` -- which reads no blob content and so triggers
+    no fetch -- and download them all with a single `git fetch` per chunk.
+
+    The window and author here mirror collect() exactly, so the fetched set is
+    precisely what --numstat will touch. Best-effort: if the git log fails, or
+    the server refuses a by-object-id fetch, this returns quietly and collect()
+    falls back to lazy fetching -- slower, but still correct.
+    """
+    args = ["log", "--raw", "--no-abbrev", f"--since={(since - GIT_WINDOW_SLACK).isoformat()}"]
+    if author:
+        args.append(f"--author={author}")
+    args.append("--pretty=format:")
+    try:
+        raw = _run_git(repo, args)
+    except (NotARepoError, RuntimeError):
+        return
+
+    zero = "0" * 40
+    oids: set[str] = set()
+    for line in raw.splitlines():
+        # A raw diff line is ":<oldmode> <newmode> <oldoid> <newoid> <status>\t<path>".
+        # Combined (merge) diffs start with "::"; they carry no single-parent
+        # numstat, so collect() never diffs them either -- skip.
+        if not line.startswith(":") or line.startswith("::"):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        for oid in (parts[2], parts[3]):
+            if oid != zero and _SHA_RE.fullmatch(oid):
+                oids.add(oid)
+    if not oids:
+        return
+
+    ordered = sorted(oids)
+    for i in range(0, len(ordered), BACKFILL_CHUNK):
+        chunk = ordered[i : i + BACKFILL_CHUNK]
+        try:
+            proc = subprocess.run(
+                ["git", "-C", str(repo), "fetch", "--quiet", "--no-tags", "origin", *chunk],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=BACKFILL_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return  # give up on the optimization; lazy fetch will cover the rest
+        if proc.returncode != 0:
+            # Server likely rejects fetching by object id; stop hammering it and
+            # let collect() lazily fetch what it needs.
+            return
 
 
 def remote_origin_url(repo: Path) -> str | None:

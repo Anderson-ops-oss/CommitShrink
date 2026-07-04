@@ -7,24 +7,24 @@ unaware that a repository might not already be on disk. Only this module,
 and the small dispatch in cli.py/web_app.py that decides whether to use it,
 know about URLs at all.
 
-Remote specs are shallow-cloned into a temporary directory, bounded to the
-assessment window (+ the same FETCH_PADDING collector.collect() itself uses)
-via --shallow-since rather than a fixed commit count, so a single day's
-activity in a huge repository and a whole week's activity in a quiet one
-both fetch roughly the right amount of history. The clone always lives in a
-TemporaryDirectory, so it is removed when the caller's `with` block exits,
+Remote specs are cloned with `--filter=blob:none --no-checkout` (a blobless
+partial clone): git downloads only commit and tree objects, not file
+contents, and skips the working-tree checkout entirely -- CommitShrink never
+needs a working tree, only `git log`. This makes the clone cheap regardless
+of repository size (a 450 MB repo whose history is mostly binaries clones in
+seconds instead of timing out). The blobs collect() actually needs for its
+--numstat diffs over the assessment window are then pre-fetched in one batch
+per chunk by collector.backfill_window_blobs(), so reading the log is fully
+local rather than incurring a network round-trip per commit. The clone always
+lives in a TemporaryDirectory, removed when the caller's `with` block exits,
 success or failure.
 
-Not detectable for a freshly cloned repository: history rewrites from
-before the clone (GIT-88.8 degrades to its documented reflog-unavailable
-copy, same as any repo without local reflog history -- no special-casing
-needed). Also not covered: a commit whose author date falls inside the
-assessment window but whose committer date is more than FETCH_PADDING in
-the past (the rare case collector.GIT_WINDOW_SLACK exists to catch for
-fully-cloned local repos) -- widening the shallow window to cover that too
-would mean cloning ~30 extra days of history on every remote assessment,
-defeating the point of a shallow clone. Tracked as a known, accepted
-limitation in docs/bug_need_fix.md, not fixed here.
+Full single-branch history is fetched -- but only its metadata, which is
+small -- so the author-time vs committer-time window edge cases that
+collector.GIT_WINDOW_SLACK guards are handled naturally: no history is
+truncated. History rewrites from before the clone remain undetectable
+(GIT-88.8 degrades to its documented reflog-unavailable copy, the same as
+any repo without local reflog history -- no special-casing needed).
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
+from .collector import backfill_window_blobs
 from .pipeline import FETCH_PADDING, compute_window
 
 CLONE_TIMEOUT_SECONDS = 60
@@ -79,10 +80,13 @@ def _resolve_clone_url(spec: str) -> str:
 
 
 @contextmanager
-def local_repo(spec: str, days: int, until: datetime | None) -> Iterator[Path]:
-    """Yield a local path for `spec`: itself if local, a fresh shallow clone
-    if remote. `days`/`until` size the clone to the same window assess_repo()
-    will use, via the shared compute_window() + FETCH_PADDING.
+def local_repo(
+    spec: str, days: int, until: datetime | None, author: str | None = None
+) -> Iterator[Path]:
+    """Yield a local path for `spec`: itself if local, a fresh blobless partial
+    clone if remote. `days`/`until`/`author` mirror the window assess_repo()
+    will use so backfill_window_blobs() pre-fetches exactly the diff blobs
+    collect() needs (see this module's docstring).
     """
     if not is_remote_spec(spec):
         yield Path(spec)
@@ -90,7 +94,6 @@ def local_repo(spec: str, days: int, until: datetime | None) -> Iterator[Path]:
 
     url = _resolve_clone_url(spec)
     start, _end = compute_window(days, until)
-    since = start - FETCH_PADDING
 
     with tempfile.TemporaryDirectory(prefix="commit-shrink-") as tmp:
         args = [
@@ -98,7 +101,8 @@ def local_repo(spec: str, days: int, until: datetime | None) -> Iterator[Path]:
             "clone",
             "--quiet",
             "--single-branch",
-            f"--shallow-since={since.isoformat()}",
+            "--filter=blob:none",
+            "--no-checkout",
             url,
             tmp,
         ]
@@ -116,4 +120,8 @@ def local_repo(spec: str, days: int, until: datetime | None) -> Iterator[Path]:
             )
         if proc.returncode != 0:
             raise CloneError(proc.stderr.strip() or f"git clone of {url} failed")
+        # Bulk-fetch the window's diff blobs up front so collect()'s --numstat
+        # reads entirely from the local object store, using the same window and
+        # author collect() will.
+        backfill_window_blobs(Path(tmp), since=start - FETCH_PADDING, author=author)
         yield Path(tmp)

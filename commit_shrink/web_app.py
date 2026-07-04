@@ -359,7 +359,9 @@ if submitted:
         else:
             with st.spinner("Reading git log and generating the assessment..."):
                 try:
-                    with local_repo(path_input, days=int(days_input), until=until) as repo_path:
+                    with local_repo(
+                        path_input, days=int(days_input), until=until, author=author
+                    ) as repo_path:
                         ctx = history.load_context([repo_path])
                         assessment = assess_repo(
                             repo_path,

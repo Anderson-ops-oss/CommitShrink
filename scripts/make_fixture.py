@@ -61,6 +61,9 @@ def build_fixture(path: Path, end: datetime | None = None) -> tuple[datetime, da
     subprocess.run(["git", "init", "-q", str(path)], check=True, capture_output=True)
     _git(path, "config", "user.name", AUTHOR_NAME)
     _git(path, "config", "user.email", AUTHOR_EMAIL)
+    # Serve partial (blobless) clones over file://, as GitHub does, so tests
+    # exercise the same clone path remote.local_repo uses in production.
+    _git(path, "config", "uploadpack.allowFilter", "true")
 
     # Bootstrap far before the period: gives the binge detector its silence gap.
     _commit(path, "chore: bootstrap project", at(-5, 9, 0), {"README.md": "# demo\n"})

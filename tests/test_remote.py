@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from commit_shrink.collector import collect
-from commit_shrink.pipeline import assess_repo
+from commit_shrink.collector import GIT_WINDOW_SLACK, collect
+from commit_shrink.pipeline import FETCH_PADDING, assess_repo, compute_window
 from commit_shrink.remote import (
     CloneError,
     RemoteAuthorRequiredError,
@@ -24,6 +24,35 @@ from commit_shrink.remote import (
     local_repo,
     require_author_for_remote,
 )
+
+
+def _window_blob_oids(repo: Path, since) -> set[str]:
+    """Blob object ids a --numstat over the window would need (tree-level)."""
+    out = subprocess.run(
+        ["git", "-C", str(repo), "log", "--raw", "--no-abbrev",
+         f"--since={since.isoformat()}", "--pretty=format:"],
+        capture_output=True, text=True, encoding="utf-8",
+    ).stdout
+    oids: set[str] = set()
+    for line in out.splitlines():
+        if line.startswith(":") and not line.startswith("::"):
+            parts = line.split()
+            if len(parts) >= 4:
+                for oid in (parts[2], parts[3]):
+                    if oid != "0" * 40 and len(oid) == 40:
+                        oids.add(oid)
+    return oids
+
+
+def _local_object_ids(repo: Path) -> set[str]:
+    """Object ids physically present in the local store (missing promisor
+    objects are not enumerated, so this excludes not-yet-fetched blobs)."""
+    out = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "--batch-check=%(objectname)",
+         "--batch-all-objects"],
+        capture_output=True, text=True,
+    ).stdout
+    return set(out.split())
 
 
 class TestIsRemoteSpec:
@@ -101,24 +130,34 @@ class TestLocalRepoContextManager:
         assert via_clone.patient_email == direct.patient_email
         assert [d.id for d in via_clone.diagnoses] == [d.id for d in direct.diagnoses]
 
-    def test_shallow_clone_is_bounded_not_full_history(self, fixture_repo):
-        """--shallow-since must actually shorten the clone, not silently
-        fall back to a full clone (which would defeat the point). The fixture
-        repo's bootstrap commit sits 5 days before the assessed Monday, one
-        day earlier than the shallow-since cutoff (start - FETCH_PADDING =
-        Monday - 3 days), so a real shallow clone must exclude exactly it.
+    def test_clone_is_blobless_partial_and_backfills_window(self, fixture_repo):
+        """The clone is a blobless partial clone (not shallow), so full history
+        metadata is present; backfill_window_blobs then pre-populates the
+        window's diff blobs locally, so collect()'s --numstat needs no lazy
+        fetch.
         """
         source_repo, _start, period_end = fixture_repo
-        far_past = period_end.replace(year=2000)
-        full_commits = collect(source_repo, since=far_past, until=period_end)
 
-        with local_repo(f"file://{source_repo}", days=7, until=period_end) as cloned_path:
-            assert (cloned_path / ".git" / "shallow").exists(), "expected a shallow clone marker"
-            shallow_commits = collect(cloned_path, since=far_past, until=period_end)
+        with local_repo(f"file://{source_repo}", days=7, until=period_end) as cloned:
+            pcf = subprocess.run(
+                ["git", "-C", str(cloned), "config", "--get", "remote.origin.partialclonefilter"],
+                capture_output=True, text=True,
+            ).stdout.strip()
+            assert pcf == "blob:none"  # blobless partial clone...
+            assert not (cloned / ".git" / "shallow").exists()  # ...not a shallow one
 
-        assert len(shallow_commits) == len(full_commits) - 1
-        assert not any(c.subject == "chore: bootstrap project" for c in shallow_commits)
-        assert any(c.subject == "chore: bootstrap project" for c in full_commits)
+            # Full history is present: the old shallow clone excluded the
+            # bootstrap commit; a blobless clone keeps every commit/tree.
+            all_commits = collect(cloned, since=period_end.replace(year=2000), until=period_end)
+            assert any(c.subject == "chore: bootstrap project" for c in all_commits)
+
+            # The window's diff blobs were fetched up front, not left as
+            # promised-but-missing objects.
+            start, _ = compute_window(7, period_end)
+            backfill_since = start - FETCH_PADDING - GIT_WINDOW_SLACK
+            window_oids = _window_blob_oids(cloned, backfill_since)
+            assert window_oids, "expected the fixture window to touch some files"
+            assert window_oids <= _local_object_ids(cloned)
 
     def test_clone_failure_raises_clone_error_not_a_crash(self, tmp_path):
         nonexistent = tmp_path / "does-not-exist"

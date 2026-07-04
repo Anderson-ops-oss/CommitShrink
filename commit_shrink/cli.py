@@ -14,7 +14,7 @@ import typer
 from rich.console import Console
 
 from . import history
-from .collector import NotARepoErr
+from .collector import NotARepoError
 from .pipeline import SUPPORTED_LANGS, NoCommitsError, assess_repo, load_config
 from .remote import (
     CloneError,
@@ -55,7 +55,7 @@ def assess(
         console.print(rc["errors"]["author_required_for_remote"])
         raise typer.Exit(code=2)
     try:
-        with local_repo(path, days=days, until=end) as repo_path:
+        with local_repo(path, days=days, until=end, author=author) as repo_path:
             ctx = history.load_context([repo_path])
             assessment = assess_repo(
                 repo_path,
