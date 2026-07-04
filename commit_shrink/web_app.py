@@ -21,6 +21,7 @@ from datetime import datetime
 
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from commit_shrink import history
 from commit_shrink.analyzer import collapse_cjk_whitespace
@@ -35,6 +36,7 @@ from commit_shrink.remote import (
     require_author_for_remote,
 )
 from commit_shrink.report import MAX_EVIDENCE_LINES, MAX_PRESCRIPTIONS, MAX_RECORDS, ReportRenderer
+from commit_shrink.waiting import run_with_rotating_messages
 
 DISPLAY_METRIC_IDS = [
     "night_despair_index",
@@ -357,33 +359,51 @@ if submitted:
         except RemoteAuthorRequiredError:
             st.error(rc["errors"]["author_required_for_remote"])
         else:
-            with st.spinner("Reading git log and generating the assessment..."):
+
+            def _work():
+                with local_repo(
+                    path_input, days=int(days_input), until=until, author=author
+                ) as repo_path:
+                    ctx = history.load_context([repo_path])
+                    assessment = assess_repo(
+                        repo_path,
+                        days=int(days_input),
+                        until=until,
+                        author=author,
+                        cfg=cfg,
+                        techdebt_history=ctx.techdebt_index,
+                    )
+                    source = "remote" if is_remote_spec(path_input) else "local"
+                    trend = history.finalize(ctx, assessment, [repo_path], source=source)
+                return assessment, trend
+
+            # st.spinner shows one fixed string; a placeholder we rewrite in a
+            # loop lets the waiting-room lines rotate while the (blocking) work
+            # runs on a worker thread. add_script_run_ctx attaches this rerun's
+            # context so the thread doesn't warn; the placeholder is always
+            # cleared, whether the work succeeds or raises.
+            waiting = st.empty()
+            try:
                 try:
-                    with local_repo(
-                        path_input, days=int(days_input), until=until, author=author
-                    ) as repo_path:
-                        ctx = history.load_context([repo_path])
-                        assessment = assess_repo(
-                            repo_path,
-                            days=int(days_input),
-                            until=until,
-                            author=author,
-                            cfg=cfg,
-                            techdebt_history=ctx.techdebt_index,
-                        )
-                        source = "remote" if is_remote_spec(path_input) else "local"
-                        trend = history.finalize(ctx, assessment, [repo_path], source=source)
-                except CloneError as e:
-                    st.error(rc["errors"]["clone_failed"].format(error=str(e)))
-                except NotARepoError:
-                    st.error(rc["errors"]["not_a_repo"])
-                except NoCommitsError:
-                    st.error(rc["errors"]["no_commits"])
-                except RuntimeError as e:
-                    st.error(str(e))
-                else:
-                    st.session_state.assessment = assessment
-                    st.session_state.trend = trend
+                    assessment, trend = run_with_rotating_messages(
+                        _work,
+                        rc["loading_messages"],
+                        lambda msg: waiting.markdown(f"🩺 {msg}"),
+                        prepare_thread=add_script_run_ctx,
+                    )
+                finally:
+                    waiting.empty()
+            except CloneError as e:
+                st.error(rc["errors"]["clone_failed"].format(error=str(e)))
+            except NotARepoError:
+                st.error(rc["errors"]["not_a_repo"])
+            except NoCommitsError:
+                st.error(rc["errors"]["no_commits"])
+            except RuntimeError as e:
+                st.error(str(e))
+            else:
+                st.session_state.assessment = assessment
+                st.session_state.trend = trend
 
 assessment = st.session_state.assessment
 trend = st.session_state.trend

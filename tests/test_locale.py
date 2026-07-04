@@ -56,6 +56,18 @@ class TestLoadConfigLocale:
                 assert s[field], f"{s['id']} missing {field}"
                 assert not _has_cjk(s[field]), f"{s['id']}.{field} still has CJK"
 
+    def test_loading_messages_present_in_both_languages(self):
+        """The waiting-room lines are locale copy like everything else: a
+        non-empty list in each language, natively worded (not translated), and
+        the en overlay wholesale-replaces the zh list (equal length by design).
+        """
+        zh = load_config("zh")["report_copy"]["loading_messages"]
+        en = load_config("en")["report_copy"]["loading_messages"]
+        assert zh and en and len(zh) == len(en)
+        assert all(isinstance(m, str) and m.strip() for m in zh + en)
+        assert all(not _has_cjk(m) for m in en)  # English lines are English
+        assert any(_has_cjk(m) for m in zh)  # Chinese lines are Chinese
+
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError):
             load_config("fr")

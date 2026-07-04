@@ -231,6 +231,17 @@ report_copy:
   report_title_fmt: "Periodic Psychological Status Assessment · Assessment Week {week}"
   label_sep: ": "   # separator between a bold label and its value (zh uses U+3000)
   missing_data_note_fmt: "{code} {name}: {copy}"   # GIT-88.8 degradation line (zh uses U+FF1A)
+  loading_messages:   # waiting-room lines cycled while the report generates (wholesale-replaces the zh list)
+    - "Sharpening the No. 2 pencils for your Rorschach test…"
+    - "The doctor will see your git log now…"
+    - "Calibrating the guilt-o-meter…"
+    - "Reviewing your 3 a.m. commits. No judgment. (Judgment.)"
+    - "Cross-referencing against the DSM-∞…"
+    - "Please lie down on the couch. This won't hurt. Much."
+    - "Counting how many times you said \"final fix\"…"
+    - "Assessing your attachment style toward your tech debt…"
+    - "Auditing every branch you named \"final\"…"
+    - "Replaying the code you deleted and then wrote back…"
   header_labels:
     patient: Subject
     period: Assessment Period

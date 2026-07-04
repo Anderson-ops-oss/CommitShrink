@@ -24,6 +24,7 @@ from .remote import (
     require_author_for_remote,
 )
 from .report import ReportRenderer
+from .waiting import run_with_rotating_messages
 
 
 def assess(
@@ -54,7 +55,7 @@ def assess(
     except RemoteAuthorRequiredError:
         console.print(rc["errors"]["author_required_for_remote"])
         raise typer.Exit(code=2)
-    try:
+    def _work():
         with local_repo(path, days=days, until=end, author=author) as repo_path:
             ctx = history.load_context([repo_path])
             assessment = assess_repo(
@@ -67,6 +68,14 @@ def assess(
             )
             source = "remote" if is_remote_spec(path) else "local"
             trend = history.finalize(ctx, assessment, [repo_path], source=source)
+        return assessment, trend
+
+    messages = rc["loading_messages"]
+    try:
+        # Cycle the waiting-room lines while the (blocking) clone/analysis runs
+        # on a worker thread; any error is re-raised here and handled below.
+        with console.status(messages[0]) as status:
+            assessment, trend = run_with_rotating_messages(_work, messages, status.update)
     except CloneError as e:
         console.print(rc["errors"]["clone_failed"].format(error=str(e)))
         raise typer.Exit(code=2)
