@@ -303,7 +303,10 @@ def render_report(assessment: Assessment, cfg: dict, trend: Trend | None = None)
     render_disclaimer_section(cfg)
 
 
-st.set_page_config(page_title="CommitShrink", page_icon=":stethoscope:")
+# Emoji literal, not the ":stethoscope:" shortcode: the shortcode makes the
+# favicon resolve to a static path containing ":", an illegal filename char on
+# Windows (os.stat -> WinError 123). The literal is inlined with no file lookup.
+st.set_page_config(page_title="CommitShrink", page_icon="🩺")
 
 # Report language. The Assessment is language-neutral (see diagnoser.Diagnosis),
 # so switching this re-renders the stored result in the new language WITHOUT

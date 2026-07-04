@@ -14,7 +14,7 @@ import typer
 from rich.console import Console
 
 from . import history
-from .collector import NotARepoError
+from .collector import NotARepoErr
 from .pipeline import SUPPORTED_LANGS, NoCommitsError, assess_repo, load_config
 from .remote import (
     CloneError,
