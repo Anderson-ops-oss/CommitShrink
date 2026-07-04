@@ -223,6 +223,28 @@ symptoms:
       (the 95% confidence interval excludes 1); it is an individualized
       parameter and is not to be shared with others.
 
+  ci_appeasement:         # GIT-45.0
+    name: CI-Appeasement Disorder
+    diagnosis: >-
+      {n} acts of propitiation toward an automated authority were detected;
+      representative sample: "{evidence}". The subject attempts to please an
+      object that is structurally incapable of being pleased; this center notes
+      that a green check mark does not constitute an emotional response.
+    prescription: >-
+      Reproducing the pipeline locally before pushing demotes "please pass"
+      from a ritual to a verification.
+
+  empty_commit:           # GIT-00.1
+    name: Existential Empty-Commit Disorder
+    diagnosis: >-
+      {n} zero-change commits were detected; representative sample:
+      "{evidence}". In the absence of evidence of progress, the subject
+      produces evidence of existence; the commit itself becomes the only
+      deliverable.
+    prescription: >-
+      When confirmation of still being present is required, water or standing
+      up are both recommended; neither is written to version history.
+
 # ------------------------------------------------------------
 # Report rendering copy (report chrome).
 # ------------------------------------------------------------
@@ -242,6 +264,17 @@ report_copy:
     - "Assessing your attachment style toward your tech debt…"
     - "Auditing every branch you named \"final\"…"
     - "Replaying the code you deleted and then wrote back…"
+  card:   # shareable card (discharge-summary styled HTML) copy
+    section_title: Shareable Card
+    index_label: Mental Health Index
+    case_label: Case No.
+    subject_label: Subject
+    primary_label: Primary Dx
+    rx_label: Rx
+    none_dx: No condition detected this period
+    footer: Generate your own assessment
+    download_label: Download card
+    saved_fmt: "Assessment card written to {path}"
   header_labels:
     patient: Subject
     period: Assessment Period

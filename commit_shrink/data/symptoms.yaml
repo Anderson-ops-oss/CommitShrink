@@ -411,6 +411,44 @@ symptoms:
       下次估算时将直觉值乘以 3。该系数系本中心对受检者历史数据回归所得
       （95% 置信区间不含 1），属个体化参数，请勿与他人共用。
 
+  - id: ci_appeasement
+    code: GIT-45.0
+    name: CI 讨好障碍
+    detectability: full
+    trigger:
+      type: message_regex
+      rule: message 命中"讨好 CI / 流水线 / 检查器"类祈使或乞求，按周期计数；出现全大写乞求升档
+      pattern: '\bfix(?:ing)? ci\b|\bci fix\b|\b(?:re-?trigger|rerun)\b.*\bci\b|please (?:pass|be green)|make (?:the )?(?:ci|build|pipeline|linter|sonar) (?:pass|happy|green)|\bci pls\b|\bgreen\?|求过|让 ?ci ?过|哄一下|放我过'
+    severity:
+      I: 1 次
+      II: 2–3 次
+      III: ≥4 次，或出现全大写乞求
+      IV: ≥6 次
+    diagnosis: >-
+      检出 {n} 次向自动化权威的献祭行为，代表样本："{evidence}"。
+      受检者试图取悦一个在结构上无法被取悦的对象；本中心指出，绿色的对勾
+      不构成情感回应。
+    prescription: >-
+      在推送前于本地复现流水线，可将"求过"从一种仪式降格为一次验证。
+
+  - id: empty_commit
+    code: GIT-00.1
+    name: 空提交存在焦虑
+    detectability: full
+    trigger:
+      type: diff_stat
+      rule: 非合并提交且改动为零（0 文件 / 0 增行 / 0 删行，即 --allow-empty），按周期计数
+    severity:
+      I: 1 次
+      II: 2–3 次
+      III: 4–5 次
+      IV: ≥6 次
+    diagnosis: >-
+      检出 {n} 次零改动提交，代表样本："{evidence}"。
+      在缺乏进展证据的情况下，受检者转而产出存在的证据；提交本身成为了唯一的交付物。
+    prescription: >-
+      当需要确认自己仍然在场时，建议改用喝水或起身活动，二者均不写入版本历史。
+
 # ------------------------------------------------------------
 # 情感词典补丁（VADER 为英文单词词典：中文 message 整条被视为
 # 单一 token 打成中性，英文短语也不在词典内，均需补丁）
@@ -489,6 +527,17 @@ report_copy:
     - 正在测量您与技术债之间的依恋类型……
     - 正在清点您有几个名字里带 final 的分支……
     - 正在回放那段您删掉又写回来的代码……
+  card:   # 分享卡（出院小结样式的 HTML 卡片）文案；英文版整体覆盖
+    section_title: 分享卡
+    index_label: 心理健康指数
+    case_label: 病例号
+    subject_label: 受检者
+    primary_label: 主诊断
+    rx_label: 处方
+    none_dx: 本周期未检出病症
+    footer: 生成属于你自己的评估报告
+    download_label: 下载评估卡
+    saved_fmt: 评估卡已写入 {path}
   header_labels:
     patient: 受检者
     period: 评估周期

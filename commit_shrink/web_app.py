@@ -21,9 +21,11 @@ from datetime import datetime
 
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from commit_shrink import history
+from commit_shrink.card import build_card_model, render_card_html
 from commit_shrink.analyzer import collapse_cjk_whitespace
 from commit_shrink.collector import NotARepoError
 from commit_shrink.history import Trend
@@ -409,3 +411,15 @@ assessment = st.session_state.assessment
 trend = st.session_state.trend
 if assessment is not None:
     render_report(assessment, cfg, trend)
+
+    # Shareable "discharge summary" card: same ReportRenderer, so it can't drift
+    # from the report above. Embedded in a sandboxed iframe; also downloadable.
+    st.subheader(rc["card"]["section_title"])
+    card_html = render_card_html(build_card_model(assessment, ReportRenderer(cfg)))
+    components.html(card_html, height=520)
+    st.download_button(
+        rc["card"]["download_label"],
+        data=card_html,
+        file_name="commitshrink-card.html",
+        mime="text/html",
+    )

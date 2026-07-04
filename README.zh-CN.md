@@ -85,13 +85,14 @@ commit-shrink path/to/repo                   # 评估指定仓库
 commit-shrink . --days 30                    # 拉长评估周期
 commit-shrink . --author you@example.com     # 指定评估某一位贡献者
 commit-shrink . --until 2026-06-28T23:59:00+08:00
+commit-shrink . --card card.html             # 额外写出一张可分享的 HTML 评估卡
 
 # 评估一个公开仓库，不用自己先手动 clone：
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
 commit-shrink https://github.com/owner/repo --author dev@example.com
 ```
 
-远程地址（`github:owner/repo` 简写，或任意 `https://`/`git@` clone 地址）会被浅克隆到一个临时目录，只拉取评估周期附近所需的历史，用完即删，不留痕迹。评估远程仓库时必须指定 `--author`——没有这个参数，工具没有任何合理依据去猜"你想看的是哪位贡献者"，所以干脆拒绝擅自挑一个提交最多的人当受检者。
+远程地址（`github:owner/repo` 简写，或任意 `https://`/`git@` clone 地址）会以 *blobless 部分克隆* 的方式拉到一个临时目录（保留完整历史元数据，文件内容仅在评估周期内按需惰性拉取），用完即删，不留痕迹。评估远程仓库时必须指定 `--author`——没有这个参数，工具没有任何合理依据去猜"你想看的是哪位贡献者"，所以干脆拒绝擅自挑一个提交最多的人当受检者。
 
 不想拿自己的提交历史冒险？生成一个"病情丰富"的演示仓库直接体验：
 
@@ -107,6 +108,10 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 
 照着它打印出来的那一行执行（`--until` 的值每天都不同）——如果不带 `--until` 直接跑 `commit-shrink fixture-repo --days 7`，评估窗口默认以*今天*结尾，会漏掉演示历史里的大部分提交。
 
+## 分享卡
+
+`--card <路径>` 会额外写出一张自包含的单页 HTML"出院小结"——含病例号、心理健康指数刻度条、主诊断和一条处方，专为浏览器打开后截图发群里而设计。它不引用任何外部资源，离线也能渲染。Streamlit 网页版会内联展示同一张卡片，并附下载按钮。
+
 ## 网页版
 
 更喜欢浏览器界面？同一套评估流程也提供了 Streamlit 网页版，用交互式 Plotly 情绪图表替代了终端版的字符走势图。
@@ -118,7 +123,7 @@ streamlit run commit_shrink/web_app.py
 
 ## 病症速览
 
-完整病症分类表（15 条）在 [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml)，这里先看几条：
+完整病症分类表（17 条）在 [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml)，这里先看几条：
 
 | 代码 | 病名 | 触发场景 |
 |---|---|---|
@@ -127,6 +132,8 @@ streamlit run commit_shrink/web_app.py
 | GIT-31.0 | 决策后悔综合征 | `Revert "Revert ..."`——对后悔本身的后悔 |
 | GIT-99.0 | P0 级心理事件 | 凌晨四点的 `hotfix` |
 | GIT-11.2 | 提交述情障碍 | 四分之一的提交信息只写了"update" |
+| GIT-45.0 | CI 讨好障碍 | `fix ci` → `please pass` → `make ci green` |
+| GIT-00.1 | 空提交存在焦虑 | 一次什么都没改的 `--allow-empty` 提交 |
 
 ## 免责声明
 

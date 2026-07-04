@@ -8,12 +8,14 @@ yourself first -- see commit_shrink/remote.py.
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.console import Console
 
 from . import history
+from .card import build_card_model, render_card_html
 from .collector import NotARepoError
 from .pipeline import SUPPORTED_LANGS, NoCommitsError, assess_repo, load_config
 from .remote import (
@@ -37,6 +39,9 @@ def assess(
     ),
     author: Optional[str] = typer.Option(None, help="Filter commits by author (git --author)."),
     lang: str = typer.Option("en", help="Report language: 'en' or 'zh'."),
+    card: Optional[str] = typer.Option(
+        None, "--card", help="Also write a shareable HTML summary card to this path."
+    ),
 ) -> None:
     """Generate a developer mental-health assessment from the repo's git log."""
     console = Console()
@@ -89,7 +94,11 @@ def assess(
         # Unexpected git failure: show the message, never a raw traceback.
         console.print(str(e))
         raise typer.Exit(code=2)
-    ReportRenderer(cfg).render(console, assessment, trend)
+    renderer = ReportRenderer(cfg)
+    renderer.render(console, assessment, trend)
+    if card:
+        Path(card).write_text(render_card_html(build_card_model(assessment, renderer)), encoding="utf-8")
+        console.print(rc["card"]["saved_fmt"].format(path=card))
 
 
 def main() -> None:

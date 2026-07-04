@@ -92,6 +92,7 @@ class Diagnoser:
         self.re_magic = pat("magical_thinking")
         self.re_debt = pat("stockholm_techdebt")
         self.re_quick = pat("time_perception")
+        self.re_ci = pat("ci_appeasement")
         self.stoplist = self.spec["alexithymia"]["trigger"]["stoplist"]
 
         # Filled during run(); used by cross-reference upgrades and the report.
@@ -557,6 +558,48 @@ class Diagnoser:
             masked=masked,
         )
 
+    def _ci_appeasement(self, period: list[Commit]) -> Diagnosis | None:
+        hits = [c for c in period if self.re_ci.search(c.message)]
+        if not hits:
+            return None
+        n = len(hits)
+        loud = any(is_scream(c.message, self.stoplist) for c in hits)
+        if n >= 6:
+            sev = "IV"
+        elif n >= 4 or loud:
+            sev = "III"
+        elif n >= 2:
+            sev = "II"
+        else:
+            sev = "I"
+        rep = next((c for c in hits if is_scream(c.message, self.stoplist)), hits[0])
+        evidence_text, masked = self.mask(rep.subject)
+        return self._diag(
+            "ci_appeasement", sev, hits, args={"n": n, "evidence": evidence_text}, masked=masked
+        )
+
+    def _empty_commit(self, period: list[Commit]) -> Diagnosis | None:
+        hits = [
+            c
+            for c in period
+            if not c.is_merge and c.files_changed == 0 and c.insertions == 0 and c.deletions == 0
+        ]
+        if not hits:
+            return None
+        n = len(hits)
+        if n >= 6:
+            sev = "IV"
+        elif n >= 4:
+            sev = "III"
+        elif n >= 2:
+            sev = "II"
+        else:
+            sev = "I"
+        evidence_text, masked = self.mask(hits[0].subject)
+        return self._diag(
+            "empty_commit", sev, hits, args={"n": n, "evidence": evidence_text}, masked=masked
+        )
+
     # -- entry point ---------------------------------------------------------
 
     def run(
@@ -586,6 +629,8 @@ class Diagnoser:
             lambda: self._commitment(period, stats),
             lambda: self._magical(period, scores),
             lambda: self._stockholm(period, techdebt_history),
+            lambda: self._ci_appeasement(period),
+            lambda: self._empty_commit(period),
             lambda: self._time_perception(period, window),  # last: reads chain shas
         ]
         diagnoses = [d for d in (fn() for fn in detectors) if d is not None]

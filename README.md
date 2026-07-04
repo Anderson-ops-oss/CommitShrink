@@ -87,13 +87,14 @@ commit-shrink path/to/repo                   # assess a specific repository
 commit-shrink . --days 30                    # widen the assessment window
 commit-shrink . --author you@example.com     # assess a specific contributor
 commit-shrink . --until 2026-06-28T23:59:00+08:00
+commit-shrink . --card card.html             # also write a shareable HTML summary card
 
 # Assess a public repository without cloning it yourself first:
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
 commit-shrink https://github.com/owner/repo --author dev@example.com
 ```
 
-Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone URL) are shallow-cloned into a temporary directory, scoped to roughly the assessment window, and discarded afterward — nothing is left on disk. `--author` is required for a remote repository: without it there's no principled way to guess which contributor you meant to assess, so CommitShrink refuses to just pick whoever committed the most that week.
+Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone URL) are cloned into a temporary directory as a *blobless partial clone* (full history metadata; file contents are fetched lazily, and only for the assessment window), then discarded afterward — nothing is left on disk. `--author` is required for a remote repository: without it there's no principled way to guess which contributor you meant to assess, so CommitShrink refuses to just pick whoever committed the most that week.
 
 Want to see it run without risking your own commit history? Generate a clinically rich demo repository and point the tool at it:
 
@@ -109,6 +110,10 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 
 Run the line it prints (the `--until` value depends on today's date) — `commit-shrink fixture-repo --days 7` on its own defaults to *today* as the window's end, which misses most of the demo history.
 
+## Shareable Card
+
+`--card <path>` additionally writes a self-contained, one-page HTML "discharge summary" — a case number, your Mental Health Index gauge, the primary diagnosis, and one prescription — meant to be opened in a browser and screenshotted into a group chat. It embeds no external assets, so it renders offline. The Streamlit app shows the same card inline, with a download button.
+
 ## Web Interface
 
 Prefer a browser? The same assessment pipeline is also available as a Streamlit app, with an interactive Plotly sentiment chart in place of the terminal's sparkline.
@@ -120,7 +125,7 @@ streamlit run commit_shrink/web_app.py
 
 ## A Few Diagnostic Codes
 
-The complete taxonomy (15 conditions) lives in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml). A preview:
+The complete taxonomy (17 conditions) lives in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml). A preview:
 
 | Code | Condition | Trigger |
 |---|---|---|
@@ -129,6 +134,8 @@ The complete taxonomy (15 conditions) lives in [`commit_shrink/data/symptoms.yam
 | GIT-31.0 | Decision Regret Syndrome | `Revert "Revert ..."` — regret about regret |
 | GIT-99.0 | Psychological Code Red | a `hotfix` at 4 AM |
 | GIT-11.2 | Commit Alexithymia | a quarter of your messages just say `update` |
+| GIT-45.0 | CI-Appeasement Disorder | `fix ci` → `please pass` → `make ci green` |
+| GIT-00.1 | Existential Empty-Commit Disorder | an `--allow-empty` commit that changes nothing |
 
 ## Disclaimer
 

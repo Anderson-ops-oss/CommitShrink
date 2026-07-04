@@ -48,9 +48,9 @@ class TestLoadConfigLocale:
         assert night["name"] == "Nocturnal Despair Index"
         assert night["norm"]["mean"] == 3.5
 
-    def test_all_15_symptoms_have_english_display_fields(self):
+    def test_all_symptoms_have_english_display_fields(self):
         cfg = load_config("en")
-        assert len(cfg["symptoms"]) == 15
+        assert len(cfg["symptoms"]) == 17
         for s in cfg["symptoms"]:
             for field in ("name", "diagnosis", "prescription"):
                 assert s[field], f"{s['id']} missing {field}"
