@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from . import history
-from .github_api import list_user_public_repos
+from .github_api import (
+    get_authenticated_login,
+    get_token,
+    list_authenticated_user_repos,
+    list_user_public_repos,
+)
 from .history import Trend
 from .pipeline import Assessment, assess_repo, assess_repos, compute_window
 from .remote import (
@@ -30,7 +35,18 @@ from .remote import (
 
 
 class NoReposError(Exception):
-    """A gh-user spec resolved to no assessable public repos in the window."""
+    """A gh-user spec resolved to no assessable repos in the window.
+
+    `is_self` is True for gh-user:@me, whose empty case spans the owner's
+    public AND private repos -- so the front-ends must not say 'public'."""
+
+    def __init__(self, username: str, is_self: bool = False):
+        super().__init__(username)
+        self.is_self = is_self
+
+
+class TokenRequiredError(Exception):
+    """`gh-user:@me` (self, including private) needs a GITHUB_TOKEN."""
 
 
 @dataclass
@@ -67,14 +83,30 @@ def _run_single(spec, days, until, author, cfg) -> RunResult:
 
 def _run_user(spec, days, until, author, cfg) -> RunResult:
     username = parse_user_spec(spec)
+    is_self = username == "@me"
     start, _end = compute_window(days, until)
-    urls = list_user_public_repos(username, since=start)  # may raise GitHubAPIError
-    if not urls:
-        raise NoReposError(username)
-    with local_repos(urls, days=days, until=until, author=author) as repos:
-        if not repos:  # every clone failed/timed out
-            raise NoReposError(username)
+    token = get_token()  # env only; None when unset
+
+    if is_self:
+        # The token owner's own repos, public AND private.
+        if not token:
+            raise TokenRequiredError()
+        login = get_authenticated_login(token)  # anchor the trend on the person
+        urls = list_authenticated_user_repos(token, since=start)
+        clone_token = token  # private repos need auth to clone
+        fingerprint = history.user_fingerprint(login)
+    else:
+        # Another user's public repos. A token (if present) only lifts the rate
+        # limit; the clone stays anonymous since the repos are public.
+        urls = list_user_public_repos(username, since=start, token=token)
+        clone_token = None
         fingerprint = history.user_fingerprint(username)
+
+    if not urls:
+        raise NoReposError(username, is_self=is_self)
+    with local_repos(urls, days=days, until=until, author=author, token=clone_token) as repos:
+        if not repos:  # every clone failed/timed out
+            raise NoReposError(username, is_self=is_self)
         ctx = history.load_context(repos, fingerprint_override=fingerprint)
         assessment = assess_repos(
             repos, days=days, until=until, author=author,

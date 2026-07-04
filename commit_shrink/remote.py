@@ -29,6 +29,8 @@ any repo without local reflog history -- no special-casing needed).
 
 from __future__ import annotations
 
+import base64
+import os
 import re
 import subprocess
 import tempfile
@@ -37,17 +39,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
-from .collector import backfill_window_blobs
+from .collector import backfill_window_blobs, git_auth_env
 from .pipeline import FETCH_PADDING, compute_window
 
 CLONE_TIMEOUT_SECONDS = 60
 
 _GITHUB_SHORTHAND_RE = re.compile(r"^github:([\w.-]+)/([\w.-]+?)(\.git)?/?$")
 _URL_RE = re.compile(r"^(https?|git|ssh|file)://|^git@", re.IGNORECASE)
-# A whole-user spec ("gh-user:octocat") -- resolved to all of that user's
-# public repos, assessed as one merged timeline (see run.py). GitHub usernames
-# are 1-39 chars of alphanumerics/hyphens; invalid ones simply 404 upstream.
-_USER_SPEC_RE = re.compile(r"^gh-user:([A-Za-z0-9][A-Za-z0-9-]{0,38})$")
+# A whole-user spec -- resolved to a merged timeline over that user's repos
+# (see run.py). "gh-user:<name>" is another user's public repos; the sentinel
+# "gh-user:@me" is the token owner's own repos, public AND private. GitHub
+# usernames are 1-39 chars of alphanumerics/hyphens; invalid ones 404 upstream.
+_USER_SPEC_RE = re.compile(r"^gh-user:(@me|[A-Za-z0-9][A-Za-z0-9-]{0,38})$")
 
 
 class CloneError(Exception):
@@ -95,9 +98,24 @@ def _resolve_clone_url(spec: str) -> str:
     return spec
 
 
-def _clone_blobless(url: str, dest: Path) -> None:
+def _persist_clone_auth(dest: Path, token: str) -> None:
+    """After cloning a private repo, write the auth header into the clone's own
+    .git/config so EVERY later git op on it authenticates too -- notably the
+    lazy `git log --numstat` blob fetch and the blob backfill fetch, which run
+    without our clone-time env. Written to the file directly (not via `git
+    config`, whose argv would expose the token); the secret lives only in this
+    temp clone and is removed with it.
+    """
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    with (dest / ".git" / "config").open("a", encoding="utf-8") as f:
+        f.write(f"\n[http]\n\textraHeader = Authorization: Basic {basic}\n")
+
+
+def _clone_blobless(url: str, dest: Path, token: str | None = None) -> None:
     """Blobless partial clone of `url` into `dest` (see this module's docstring).
-    Raises CloneError on timeout or a non-zero git exit."""
+    A token (for a private repo) authenticates the clone via git_auth_env (env,
+    never URL/argv) and is then persisted into the clone's config so later ops
+    stay authenticated. Raises CloneError on timeout or a non-zero git exit."""
     args = [
         "git",
         "clone",
@@ -115,11 +133,14 @@ def _clone_blobless(url: str, dest: Path) -> None:
             text=True,
             encoding="utf-8",
             timeout=CLONE_TIMEOUT_SECONDS,
+            env={**os.environ, **git_auth_env(token)},
         )
     except subprocess.TimeoutExpired:
         raise CloneError(f"cloning {url} did not finish within {CLONE_TIMEOUT_SECONDS}s")
     if proc.returncode != 0:
         raise CloneError(proc.stderr.strip() or f"git clone of {url} failed")
+    if token:
+        _persist_clone_auth(dest, token)
 
 
 @contextmanager
@@ -149,13 +170,19 @@ def local_repo(
 
 @contextmanager
 def local_repos(
-    clone_urls: list[str], days: int, until: datetime | None, author: str | None = None
+    clone_urls: list[str],
+    days: int,
+    until: datetime | None,
+    author: str | None = None,
+    token: str | None = None,
 ) -> Iterator[list[Path]]:
     """Blobless-clone several remote URLs into one temp parent and yield the
     successfully-cloned paths (oldest step first). A clone that fails or times
     out is skipped rather than aborting the batch -- the caller compares the
-    yielded count against the input to report the coverage. Every clone is
-    removed when the block exits.
+    yielded count against the input to report the coverage. `token` (for the
+    authenticated user's private repos) authenticates each clone, which then
+    persists it into that clone's config so the backfill fetch inherits it.
+    Every clone is removed when the block exits.
     """
     start, _end = compute_window(days, until)
     with tempfile.TemporaryDirectory(prefix="commit-shrink-multi-") as parent:
@@ -163,9 +190,11 @@ def local_repos(
         for i, url in enumerate(clone_urls):
             dest = Path(parent) / f"repo-{i}"
             try:
-                _clone_blobless(url, dest)
+                _clone_blobless(url, dest, token=token)
             except CloneError:
                 continue  # one bad repo shouldn't sink the whole assessment
+            # The clone persisted its auth into .git/config, so backfill (and
+            # collect's later lazy fetch) authenticate without a token argument.
             backfill_window_blobs(dest, since=start - FETCH_PADDING, author=author)
             paths.append(dest)
         yield paths

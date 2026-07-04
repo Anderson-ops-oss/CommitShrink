@@ -616,3 +616,5 @@ report_copy:
     author_required_for_remote: 评估他人仓库时必须指定受检对象（author），本中心不代为猜测样本归属。
     user_lookup_failed: "远程用户样本采集失败：{error}。本中心的取样范围受限于网络连接与 GitHub 接口可用性。"
     no_public_repos: 该用户在评估窗口内没有可采集的公开仓库。本中心无法对不存在的行为作出诊断。
+    no_owned_repos: 您在评估窗口内没有可采集的自有仓库（公开或私有）。本中心无法对不存在的行为作出诊断。
+    token_required: "评估自己（含私有仓库）需要设置 GITHUB_TOKEN 环境变量。本中心不通过命令行接收凭证。"

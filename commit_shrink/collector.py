@@ -16,6 +16,8 @@ from the middle fields (a FIELD_SEP inside a message cannot shift numstat).
 
 from __future__ import annotations
 
+import base64
+import os
 import re
 import subprocess
 from datetime import datetime, timedelta
@@ -48,6 +50,31 @@ _NOT_REPO_MARKERS = ("not a git repository", "cannot change to", "no such file o
 
 class NotARepoError(Exception):
     """Raised when the target path is not a git repository."""
+
+
+def git_auth_env(token: str | None) -> dict[str, str]:
+    """Extra environment that authenticates an HTTPS git clone against a private
+    repo -- WITHOUT the token appearing in the URL or the argv. git reads
+    GIT_CONFIG_* from the environment (unlike `-c`, which shows up in `ps`), so
+    the credential stays off the command line. Empty dict when there is no
+    token; public repos need no auth. Callers merge it into os.environ.
+
+    Appends at the caller's existing GIT_CONFIG_COUNT rather than hardcoding
+    index 0, so a user/CI that already injects config via GIT_CONFIG_* (proxy,
+    sslVerify, ...) keeps those entries instead of having them clobbered.
+    """
+    if not token:
+        return {}
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    try:
+        n = int(os.environ.get("GIT_CONFIG_COUNT", "") or "0")
+    except ValueError:
+        n = 0
+    return {
+        "GIT_CONFIG_COUNT": str(n + 1),
+        f"GIT_CONFIG_KEY_{n}": "http.extraHeader",
+        f"GIT_CONFIG_VALUE_{n}": f"Authorization: Basic {basic}",
+    }
 
 
 def _run_git(repo: Path, args: list[str]) -> str:

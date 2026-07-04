@@ -95,11 +95,17 @@ commit-shrink https://github.com/owner/repo --author dev@example.com
 
 # Assess a whole GitHub user — all their public repos, as one merged timeline:
 commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
+
+# Assess yourself, including PRIVATE repos (needs a token; see below):
+export GITHUB_TOKEN=ghp_...        # or GH_TOKEN
+commit-shrink gh-user:@me --author you@example.com --days 30
 ```
 
 Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone URL) are cloned into a temporary directory as a *blobless partial clone* (full history metadata; file contents are fetched lazily, and only for the assessment window), then discarded afterward — nothing is left on disk. `--author` is required for a remote repository: without it there's no principled way to guess which contributor you meant to assess, so CommitShrink refuses to just pick whoever committed the most that week.
 
-A `gh-user:<name>` spec goes one step further: it discovers the user's public repositories (owned, most-recently-pushed first), assesses them all as a *single merged commit timeline*, and anchors the cross-run trend to the person rather than any one repo — so the trend survives the user adding or archiving repos. `--author` is required here too (pass an email); the scope is the user's own public repos with activity in the window. Assessing repos they contributed to but don't own, and private repos, are out of scope for now.
+A `gh-user:<name>` spec goes one step further: it discovers the user's public repositories (owned, most-recently-pushed first), assesses them all as a *single merged commit timeline*, and anchors the cross-run trend to the person rather than any one repo — so the trend survives the user adding or archiving repos. `--author` is required here too (pass an email); the scope is the user's own public repos with activity in the window.
+
+**Assessing yourself, including private repos.** `gh-user:@me` assesses *your own* repos — public **and** private — as one merged timeline. It needs a GitHub token in the environment (`GITHUB_TOKEN` or `GH_TOKEN`, never a command-line flag): a classic token with the `repo` scope, or a fine-grained token with **Contents: read** + **Metadata: read** on the repos you want covered. The token is passed to git via the environment, so it never appears in a URL, in `ps` output, or in your shell history; the history cache stores only diagnosis metadata (codes, scores), never code. A token is also useful on `gh-user:<someone-else>` — there it just lifts the anonymous 60-requests/hour rate limit (handy on a shared/NAT'd network like a campus), and never grants access to anyone else's private repos (GitHub enforces that server-side). You can check your remaining anonymous quota at `https://api.github.com/rate_limit`.
 
 Want to see it run without risking your own commit history? Generate a clinically rich demo repository and point the tool at it:
 

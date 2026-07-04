@@ -23,15 +23,16 @@ from .pipeline import SUPPORTED_LANGS, NoCommitsError, load_config
 from .remote import RemoteAuthorRequiredError, require_author_for_remote
 from .remote import CloneError
 from .report import ReportRenderer
-from .run import NoReposError, run_assessment
+from .run import NoReposError, TokenRequiredError, run_assessment
 from .waiting import run_with_rotating_messages
 
 
 def assess(
     path: str = typer.Argument(
         ".",
-        help="Local path, a remote spec (URL / github:owner/repo), or gh-user:owner "
-        "to assess all of a user's public repos as one merged timeline.",
+        help="Local path, a remote spec (URL / github:owner/repo), gh-user:owner for a "
+        "user's public repos, or gh-user:@me for your own public + private "
+        "(needs GITHUB_TOKEN), assessed as one merged timeline.",
     ),
     days: int = typer.Option(7, help="Length of the assessment period in days."),
     until: Optional[str] = typer.Option(
@@ -75,8 +76,11 @@ def assess(
     except GitHubAPIError as e:
         console.print(rc["errors"]["user_lookup_failed"].format(error=str(e)))
         raise typer.Exit(code=2)
-    except NoReposError:
-        console.print(rc["errors"]["no_public_repos"])
+    except TokenRequiredError:
+        console.print(rc["errors"]["token_required"])
+        raise typer.Exit(code=2)
+    except NoReposError as e:
+        console.print(rc["errors"]["no_owned_repos" if e.is_self else "no_public_repos"])
         raise typer.Exit(code=1)
     except NotARepoError:
         console.print(rc["errors"]["not_a_repo"])

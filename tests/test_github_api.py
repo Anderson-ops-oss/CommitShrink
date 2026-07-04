@@ -111,3 +111,81 @@ def test_null_pushed_at_skipped_when_since_set(monkeypatch):
 def test_null_pushed_at_kept_when_no_since(monkeypatch):
     _patch(monkeypatch, [{"clone_url": "https://github.com/u/empty.git", "pushed_at": None}])
     assert list_user_public_repos("u") == ["https://github.com/u/empty.git"]
+
+
+def _capture_auth(monkeypatch, payload):
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["auth"] = next(
+            (v for k, v in req.headers.items() if k.lower() == "authorization"), None
+        )
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(github_api.urllib.request, "urlopen", fake_urlopen)
+    return captured
+
+
+def test_token_adds_bearer_header(monkeypatch):
+    captured = _capture_auth(monkeypatch, [])
+    list_user_public_repos("u", token="tok123")
+    assert captured["auth"] == "Bearer tok123"
+
+
+def test_no_token_no_auth_header(monkeypatch):
+    captured = _capture_auth(monkeypatch, [])
+    list_user_public_repos("u")
+    assert captured["auth"] is None
+
+
+def test_authenticated_user_repos_parses(monkeypatch):
+    _patch(monkeypatch, [_repo("a", "2026-02-01T00:00:00Z"), _repo("b", "2026-01-15T00:00:00Z")])
+    assert github_api.list_authenticated_user_repos("tok") == [
+        "https://github.com/u/a.git",
+        "https://github.com/u/b.git",
+    ]
+
+
+def test_get_authenticated_login(monkeypatch):
+    _patch(monkeypatch, {"login": "octocat"})
+    assert github_api.get_authenticated_login("tok") == "octocat"
+
+
+def test_401_maps_to_token_error(monkeypatch):
+    _patch(monkeypatch, error=urllib.error.HTTPError("http://x", 401, "unauth", {}, None))
+    with pytest.raises(GitHubAPIError, match="invalid or expired"):
+        github_api.list_authenticated_user_repos("badtok")
+
+
+def test_public_lookup_retries_anonymously_on_401(monkeypatch):
+    # An expired token must not block a lookup that works anonymously.
+    seen = []
+
+    def fake_urlopen(req, timeout=None):
+        auth = next((v for k, v in req.headers.items() if k.lower() == "authorization"), None)
+        seen.append(auth)
+        if auth:
+            raise urllib.error.HTTPError("http://x", 401, "unauth", {}, None)
+        return _FakeResp([_repo("a", "2026-02-01T00:00:00Z")])
+
+    monkeypatch.setattr(github_api.urllib.request, "urlopen", fake_urlopen)
+    urls = list_user_public_repos("u", token="expired")
+    assert urls == ["https://github.com/u/a.git"]
+    assert seen[0] is not None and seen[-1] is None  # tried token, then anonymous
+
+
+def test_authenticated_lookup_does_not_retry_on_401(monkeypatch):
+    # @me can't fall back to anonymous, so a bad token must surface.
+    _patch(monkeypatch, error=urllib.error.HTTPError("http://x", 401, "unauth", {}, None))
+    with pytest.raises(GitHubAPIError, match="invalid or expired"):
+        github_api.list_authenticated_user_repos("expired")
+
+
+def test_get_token_env_precedence(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    assert github_api.get_token() is None
+    monkeypatch.setenv("GH_TOKEN", "z")
+    assert github_api.get_token() == "z"
+    monkeypatch.setenv("GITHUB_TOKEN", "a")
+    assert github_api.get_token() == "a"  # GITHUB_TOKEN wins

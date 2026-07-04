@@ -31,7 +31,7 @@ from commit_shrink.github_api import GitHubAPIError
 from commit_shrink.history import Trend
 from commit_shrink.pipeline import Assessment, NoCommitsError, load_config
 from commit_shrink.remote import CloneError, RemoteAuthorRequiredError, require_author_for_remote
-from commit_shrink.run import NoReposError, run_assessment
+from commit_shrink.run import NoReposError, TokenRequiredError, run_assessment
 from commit_shrink.report import MAX_EVIDENCE_LINES, MAX_PRESCRIPTIONS, MAX_RECORDS, ReportRenderer
 from commit_shrink.waiting import run_with_rotating_messages
 
@@ -335,8 +335,8 @@ with st.form("assessment_form"):
     path_input = st.text_input(
         "Repository path, a public repo URL / github:owner/repo, or a whole user gh-user:owner",
         value=".",
-        help="e.g.  .   •   github:torvalds/linux   •   gh-user:octocat "
-        "(assesses all of a user's public repos as one timeline)",
+        help="e.g.  .   •   github:torvalds/linux   •   gh-user:octocat (a user's public repos)"
+        "   •   gh-user:@me (your own public + private — needs GITHUB_TOKEN in the environment)",
     )
     days_input = st.number_input("Assessment window (days)", min_value=1, value=7, step=1)
     author_input = st.text_input(
@@ -385,8 +385,10 @@ if submitted:
                 st.error(rc["errors"]["clone_failed"].format(error=str(e)))
             except GitHubAPIError as e:
                 st.error(rc["errors"]["user_lookup_failed"].format(error=str(e)))
-            except NoReposError:
-                st.error(rc["errors"]["no_public_repos"])
+            except TokenRequiredError:
+                st.error(rc["errors"]["token_required"])
+            except NoReposError as e:
+                st.error(rc["errors"]["no_owned_repos" if e.is_self else "no_public_repos"])
             except NotARepoError:
                 st.error(rc["errors"]["not_a_repo"])
             except NoCommitsError:

@@ -71,6 +71,10 @@ class TestUserSpec:
         assert is_user_spec("gh-user:Anderson-ops-oss")
         assert parse_user_spec("gh-user:Anderson-ops-oss") == "Anderson-ops-oss"
 
+    def test_recognizes_at_me_self_spec(self):
+        assert is_user_spec("gh-user:@me")
+        assert parse_user_spec("gh-user:@me") == "@me"
+
     def test_rejects_non_user_specs(self):
         assert not is_user_spec("github:owner/repo")
         assert not is_user_spec("Anderson-ops-oss")  # bare name is not a spec
@@ -224,6 +228,70 @@ class TestReviewRegressions:
         assert trend.composite_delta is None  # NO_TREND: the drift split the streak
 
 
+class TestGitAuthEnv:
+    def test_none_token_is_empty(self):
+        from commit_shrink.collector import git_auth_env
+
+        assert git_auth_env(None) == {}
+
+    def test_token_goes_into_config_env_not_argv(self, monkeypatch):
+        import base64
+
+        from commit_shrink.collector import git_auth_env
+
+        monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
+        env = git_auth_env("tok")
+        assert env["GIT_CONFIG_COUNT"] == "1"
+        assert env["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+        expected = base64.b64encode(b"x-access-token:tok").decode()
+        assert env["GIT_CONFIG_VALUE_0"] == f"Authorization: Basic {expected}"
+        # The raw token appears only inside the base64 value, never as a bare key.
+        assert "tok" not in env["GIT_CONFIG_KEY_0"]
+
+    def test_appends_to_existing_config_env(self, monkeypatch):
+        # A caller/CI already injecting config via GIT_CONFIG_* must keep it:
+        # append at the next free index, don't clobber index 0 / reset count.
+        from commit_shrink.collector import git_auth_env
+
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+        env = git_auth_env("tok")
+        assert env["GIT_CONFIG_COUNT"] == "3"
+        assert env["GIT_CONFIG_KEY_2"] == "http.extraHeader"
+        assert "GIT_CONFIG_KEY_0" not in env  # the user's existing 0/1 survive
+
+
+class TestClonePersistsAuth:
+    def test_token_written_to_clone_config(self, tmp_path):
+        # Fix: later git ops on the clone (lazy --numstat fetch, backfill) must
+        # authenticate, so the header is persisted into the clone's own config.
+        import base64
+
+        from commit_shrink.remote import _clone_blobless
+
+        src = _mini_repo(tmp_path / "src", [("a", "me@x")])
+        subprocess.run(
+            ["git", "-C", str(src), "config", "uploadpack.allowFilter", "true"],
+            check=True, capture_output=True,
+        )
+        dest = tmp_path / "clone"
+        _clone_blobless(f"file://{src}", dest, token="sekret")
+        config = (dest / ".git" / "config").read_text(encoding="utf-8")
+        assert "extraHeader" in config
+        assert base64.b64encode(b"x-access-token:sekret").decode() in config
+
+    def test_no_token_leaves_config_clean(self, tmp_path):
+        from commit_shrink.remote import _clone_blobless
+
+        src = _mini_repo(tmp_path / "src", [("a", "me@x")])
+        subprocess.run(
+            ["git", "-C", str(src), "config", "uploadpack.allowFilter", "true"],
+            check=True, capture_output=True,
+        )
+        dest = tmp_path / "clone"
+        _clone_blobless(f"file://{src}", dest)
+        assert "extraHeader" not in (dest / ".git" / "config").read_text(encoding="utf-8")
+
+
 class TestRunAssessmentUserPath:
     def test_end_to_end_with_stubbed_api(self, tmp_path, monkeypatch):
         """gh-user path: stub discovery to a file:// repo, clone for real, assess
@@ -237,6 +305,8 @@ class TestRunAssessmentUserPath:
             check=True, capture_output=True,
         )
         monkeypatch.setenv("COMMIT_SHRINK_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.setattr(run, "list_user_public_repos", lambda *a, **k: [f"file://{repo}"])
 
         result = run.run_assessment(
@@ -245,3 +315,58 @@ class TestRunAssessmentUserPath:
         assert result.discovered_count == 1
         assert result.repo_count == 1
         assert result.assessment.stats.total == 2
+
+
+class TestRunAssessmentSelfPath:
+    def test_me_without_token_raises(self, monkeypatch):
+        from commit_shrink import run
+
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        with pytest.raises(run.TokenRequiredError):
+            run.run_assessment("gh-user:@me", days=7, until=UNTIL, author="me@x", cfg=load_config())
+
+    def test_me_end_to_end_with_token(self, tmp_path, monkeypatch):
+        """@me path: token present, discovery/login stubbed to a file:// repo
+        (file transport ignores the auth header), merged timeline assessed."""
+        from commit_shrink import run
+
+        repo = _mini_repo(tmp_path / "src", [("a", "me@x"), ("b", "me@x"), ("c", "me@x")])
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "uploadpack.allowFilter", "true"],
+            check=True, capture_output=True,
+        )
+        monkeypatch.setenv("GITHUB_TOKEN", "faketok")
+        monkeypatch.setenv("COMMIT_SHRINK_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setattr(run, "get_authenticated_login", lambda token: "octocat")
+        monkeypatch.setattr(run, "list_authenticated_user_repos", lambda token, **k: [f"file://{repo}"])
+
+        result = run.run_assessment(
+            "gh-user:@me", days=7, until=UNTIL, author="me@x", cfg=load_config()
+        )
+        assert result.discovered_count == 1
+        assert result.assessment.stats.total == 3
+
+    def test_me_empty_is_flagged_self(self, monkeypatch):
+        from commit_shrink import run
+
+        monkeypatch.setenv("GITHUB_TOKEN", "tok")
+        monkeypatch.setattr(run, "get_authenticated_login", lambda t: "octocat")
+        monkeypatch.setattr(run, "list_authenticated_user_repos", lambda t, **k: [])
+        with pytest.raises(run.NoReposError) as ei:
+            run.run_assessment("gh-user:@me", days=7, until=UNTIL, author="me@x", cfg=load_config())
+        assert ei.value.is_self is True  # -> renders no_owned_repos, not "public"
+
+    def test_other_empty_is_not_flagged_self(self, monkeypatch):
+        from commit_shrink import run
+
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setattr(run, "list_user_public_repos", lambda *a, **k: [])
+        with pytest.raises(run.NoReposError) as ei:
+            run.run_assessment("gh-user:ghost", days=7, until=UNTIL, author="me@x", cfg=load_config())
+        assert ei.value.is_self is False
+
+    def test_no_owned_repos_key_in_both_locales(self):
+        for lang in ("zh", "en"):
+            assert load_config(lang)["report_copy"]["errors"]["no_owned_repos"]

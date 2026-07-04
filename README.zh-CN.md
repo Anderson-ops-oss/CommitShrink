@@ -93,11 +93,17 @@ commit-shrink https://github.com/owner/repo --author dev@example.com
 
 # 评估某个 GitHub 用户的全部公开仓库，合并为一条时间线：
 commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
+
+# 评估你自己，含私有仓库（需要 token，见下）：
+export GITHUB_TOKEN=ghp_...        # 或 GH_TOKEN
+commit-shrink gh-user:@me --author you@example.com --days 30
 ```
 
 远程地址（`github:owner/repo` 简写，或任意 `https://`/`git@` clone 地址）会以 *blobless 部分克隆* 的方式拉到一个临时目录（保留完整历史元数据，文件内容仅在评估周期内按需惰性拉取），用完即删，不留痕迹。评估远程仓库时必须指定 `--author`——没有这个参数，工具没有任何合理依据去猜"你想看的是哪位贡献者"，所以干脆拒绝擅自挑一个提交最多的人当受检者。
 
-`gh-user:<用户名>` 更进一步：它会发现该用户的公开仓库（owned，按最近推送排序），把它们**合并成一条提交时间线**一起评估，并让跨周趋势锚定到"人"而非某个仓库——这样用户新增或归档仓库时趋势也不会断。同样必须指定 `--author`（填邮箱）；范围是该用户在窗口内有活动的自有公开仓库。评估他"贡献过但不拥有"的仓库、以及私有仓库，暂不在范围内。
+`gh-user:<用户名>` 更进一步：它会发现该用户的公开仓库（owned，按最近推送排序），把它们**合并成一条提交时间线**一起评估，并让跨周趋势锚定到"人"而非某个仓库——这样用户新增或归档仓库时趋势也不会断。同样必须指定 `--author`（填邮箱）；范围是该用户在窗口内有活动的自有公开仓库。
+
+**评估你自己，含私有仓库。** `gh-user:@me` 评估**你自己**的仓库——公开**和**私有——合并为一条时间线。它需要环境里有 GitHub token（`GITHUB_TOKEN` 或 `GH_TOKEN`，**绝不用命令行参数**）：classic token 勾 `repo` scope，或 fine-grained token 对目标仓库授予 **Contents: read** + **Metadata: read**。token 通过环境变量传给 git，所以**不会出现在 URL、`ps` 输出或 shell 历史里**；历史缓存也只存诊断元数据（病症码、分数），**从不存代码**。token 对 `gh-user:<别人>` 也有用——那里它只是把匿名的 60 次/小时限额提上去（校园网这种共享 IP 尤其有用），并且**永远无法访问别人的私有仓库**（GitHub 服务端强制）。你的匿名剩余额度可在 `https://api.github.com/rate_limit` 查看。
 
 不想拿自己的提交历史冒险？生成一个"病情丰富"的演示仓库直接体验：
 

@@ -393,6 +393,13 @@ report_copy:
     no_public_repos: >-
       This user has no public repositories with activity in the assessment
       window. This center cannot diagnose behavior that did not occur.
+    no_owned_repos: >-
+      You have no owned repositories (public or private) with activity in the
+      assessment window. This center cannot diagnose behavior that did not occur.
+    token_required: >-
+      Assessing yourself (including private repositories) requires a
+      GITHUB_TOKEN environment variable. This center does not accept
+      credentials on the command line.
 
 # ------------------------------------------------------------
 # Fixed boilerplate copy (report skeleton).
