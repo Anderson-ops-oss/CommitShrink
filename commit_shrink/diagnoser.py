@@ -116,7 +116,11 @@ class Diagnoser:
         return masked, masked != text
 
     def _segments(self, commits: list[Commit]) -> list[list[Commit]]:
-        """Split into topic segments: gap < 2h AND overlapping file sets."""
+        """Split into topic segments: same repo AND gap < 2h AND overlapping
+        file sets. The same-repo guard matters only for a merged multi-repo
+        (gh-user) timeline -- it stops identically-named files in different
+        repos (README.md, __init__.py) from being read as one topic; in a
+        single-repo assessment every commit shares the empty repo_key."""
         segments: list[list[Commit]] = []
         current: list[Commit] = []
         for c in commits:
@@ -125,8 +129,9 @@ class Diagnoser:
             if current:
                 prev = current[-1]
                 gap_ok = (c.ts - prev.ts) < SEGMENT_GAP  # yaml: "相邻间隔 <2h"
+                same_repo = prev.repo_key == c.repo_key
                 overlap = bool(_topic_paths(prev) & _topic_paths(c))
-                if gap_ok and overlap:
+                if gap_ok and same_repo and overlap:
                     current.append(c)
                     continue
                 segments.append(current)
@@ -392,9 +397,12 @@ class Diagnoser:
         for c in period:
             if c.is_merge or (c.files_changed < 20 and c.insertions < 1000):
                 continue
-            prior = [
-                w for w in window if w.ts < c.ts and w.author_email == c.author_email and not w.is_merge
-            ]
+            # Prior activity is any of the patient's earlier non-merge commits.
+            # (No author_email match: a single-repo run is already narrowed to
+            # one email, and the merged gh-user timeline keeps the person's
+            # several identities -- filtering by one email there would invent
+            # "silence" before a commit landed under a secondary identity.)
+            prior = [w for w in window if w.ts < c.ts and not w.is_merge]
             gap = (c.ts - prior[-1].ts) if prior else None
             if gap is None or gap >= timedelta(hours=72):
                 episodes.append((c, gap))
@@ -522,6 +530,7 @@ class Diagnoser:
                 for w in window
                 if c.ts < w.ts <= c.ts + timedelta(hours=24)
                 and w.sha != c.sha
+                and w.repo_key == c.repo_key  # a fix in another repo isn't a follow-up
                 and self.re_fix.search(w.message)
             ]
             if len(follows) >= 2:

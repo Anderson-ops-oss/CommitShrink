@@ -15,18 +15,14 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from . import history
 from .card import build_card_model, render_card_html
 from .collector import NotARepoError
-from .pipeline import SUPPORTED_LANGS, NoCommitsError, assess_repo, load_config
-from .remote import (
-    CloneError,
-    RemoteAuthorRequiredError,
-    is_remote_spec,
-    local_repo,
-    require_author_for_remote,
-)
+from .github_api import GitHubAPIError
+from .pipeline import SUPPORTED_LANGS, NoCommitsError, load_config
+from .remote import RemoteAuthorRequiredError, require_author_for_remote
+from .remote import CloneError
 from .report import ReportRenderer
+from .run import NoReposError, run_assessment
 from .waiting import run_with_rotating_messages
 
 
@@ -62,29 +58,23 @@ def assess(
         console.print(rc["errors"]["author_required_for_remote"])
         raise typer.Exit(code=2)
     def _work():
-        with local_repo(path, days=days, until=end, author=author) as repo_path:
-            ctx = history.load_context([repo_path])
-            assessment = assess_repo(
-                repo_path,
-                days=days,
-                until=end,
-                author=author,
-                cfg=cfg,
-                techdebt_history=ctx.techdebt_index,
-            )
-            source = "remote" if is_remote_spec(path) else "local"
-            trend = history.finalize(ctx, assessment, [repo_path], source=source)
-        return assessment, trend
+        return run_assessment(path, days=days, until=end, author=author, cfg=cfg)
 
     messages = rc["loading_messages"]
     try:
         # Cycle the waiting-room lines while the (blocking) clone/analysis runs
         # on a worker thread; any error is re-raised here and handled below.
         with console.status(messages[0]) as status:
-            assessment, trend = run_with_rotating_messages(_work, messages, status.update)
+            result = run_with_rotating_messages(_work, messages, status.update)
     except CloneError as e:
         console.print(rc["errors"]["clone_failed"].format(error=str(e)))
         raise typer.Exit(code=2)
+    except GitHubAPIError as e:
+        console.print(rc["errors"]["user_lookup_failed"].format(error=str(e)))
+        raise typer.Exit(code=2)
+    except NoReposError:
+        console.print(rc["errors"]["no_public_repos"])
+        raise typer.Exit(code=1)
     except NotARepoError:
         console.print(rc["errors"]["not_a_repo"])
         raise typer.Exit(code=2)
@@ -96,9 +86,13 @@ def assess(
         console.print(str(e))
         raise typer.Exit(code=2)
     renderer = ReportRenderer(cfg)
-    renderer.render(console, assessment, trend)
+    renderer.render(console, result.assessment, result.trend)
+    if result.discovered_count is not None:
+        console.print(rc["aggregate_note_fmt"].format(n=result.repo_count))
     if card:
-        Path(card).write_text(render_card_html(build_card_model(assessment, renderer)), encoding="utf-8")
+        Path(card).write_text(
+            render_card_html(build_card_model(result.assessment, renderer)), encoding="utf-8"
+        )
         console.print(rc["card"]["saved_fmt"].format(path=card))
 
 

@@ -516,6 +516,7 @@ report_copy:
   report_title_fmt: 周期性心理状态评估报告 · 第 {week} 评估周
   label_sep: "　"   # 标签与取值之间的分隔（全角空格）；英文版覆盖为 ": "
   missing_data_note_fmt: "{code} {name}：{copy}"   # GIT-88.8 缺数据降级行；英文版用半角冒号
+  aggregate_note_fmt: "本次评估覆盖 {n} 个公开仓库，已合并为一条时间线。"   # gh-user 聚合模式脚注
   loading_messages:   # 生成报告时轮播的候诊等待语；英文版整体覆盖（见 locales/en.yaml）
     - 正在调阅您凌晨三点的提交记录……
     - 正在校准愧疚度测量仪……
@@ -613,3 +614,5 @@ report_copy:
     not_a_repo: 该路径不是 git 仓库。本中心仅受理版本控制下的行为样本。
     clone_failed: "远程样本采集失败：{error}。本中心的取样范围受限于网络连接与仓库可访问性，这不属于受检者的责任。"
     author_required_for_remote: 评估他人仓库时必须指定受检对象（author），本中心不代为猜测样本归属。
+    user_lookup_failed: "远程用户样本采集失败：{error}。本中心的取样范围受限于网络连接与 GitHub 接口可用性。"
+    no_public_repos: 该用户在评估窗口内没有可采集的公开仓库。本中心无法对不存在的行为作出诊断。

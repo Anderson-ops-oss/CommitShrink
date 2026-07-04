@@ -82,6 +82,17 @@ def repo_fingerprint(repos: Sequence[Path]) -> str:
     return hashlib.sha256("\n".join(bases).encode()).hexdigest()[:16]
 
 
+def user_fingerprint(username: str) -> str:
+    """Person-anchored identity for a `gh-user:` aggregate assessment.
+
+    Keyed on the user, NOT on the set of repos, so the trend line survives the
+    user adding or archiving repos week to week -- a repo-set fingerprint would
+    change and silently reset the streak. Human-readable on purpose (it lands
+    in history.jsonl).
+    """
+    return f"user:{username.lower()}"
+
+
 def _cache_dir() -> Path:
     override = os.environ.get("COMMIT_SHRINK_CACHE_DIR")
     if override:
@@ -269,15 +280,26 @@ class HistoryContext:
     techdebt_index: dict[str, str]
 
 
-def load_context(repos: Sequence[Path], path: Path | None = None) -> HistoryContext:
+def load_context(
+    repos: Sequence[Path],
+    path: Path | None = None,
+    fingerprint_override: str | None = None,
+) -> HistoryContext:
     """Degrades to an empty context if the repo has no discoverable identity
     yet (no remote and no commits) -- the caller still renders a normal
     first-assessment report, just without cross-period data.
+
+    `fingerprint_override` (e.g. history.user_fingerprint(username)) keys the
+    history by something other than the repo set -- the gh-user aggregate uses
+    it so trend continuity survives the user's repo set changing.
     """
-    try:
-        fingerprint = repo_fingerprint(repos)
-    except FingerprintError:
-        return HistoryContext(fingerprint=None, techdebt_index={})
+    if fingerprint_override is not None:
+        fingerprint = fingerprint_override
+    else:
+        try:
+            fingerprint = repo_fingerprint(repos)
+        except FingerprintError:
+            return HistoryContext(fingerprint=None, techdebt_index={})
     techdebt_index = build_techdebt_index(load_history(None, fingerprint, path=path))
     return HistoryContext(fingerprint=fingerprint, techdebt_index=techdebt_index)
 
@@ -288,14 +310,32 @@ def finalize(
     repos: Sequence[Path],
     source: str,
     path: Path | None = None,
+    patient_scoped: bool = True,
 ) -> Trend:
     """Compute this assessment's trend against prior periods, then record it
-    for next time. Call once, after assess_repo() succeeds, with the same
-    `ctx` returned by load_context() for this run.
+    for next time. Call once, after assess_repo()/assess_repos() succeeds, with
+    the same `ctx` returned by load_context() for this run.
+
+    Records against ctx.fingerprint (which may be a user_fingerprint override),
+    not a freshly recomputed repo fingerprint.
+
+    `patient_scoped` controls how the prior-period lookup is keyed:
+    - True  (single repo): prior periods are matched by (patient_email,
+      fingerprint) -- a repo fingerprint is shared by everyone who committed to
+      it, so the email is what isolates *this* person's trend line.
+    - False (gh-user aggregate): the fingerprint is ALREADY person-specific
+      (user_fingerprint(username)), so we match by fingerprint alone. Scoping by
+      email here would break continuity, because assess_repos deliberately keeps
+      multiple identities and the volume-dominant email can drift week to week.
     """
     if ctx.fingerprint is None:
         return NO_TREND
-    prior = load_history(assessment.patient_email, ctx.fingerprint, path=path)
+    lookup_email = None if not patient_scoped else assessment.patient_email
+    prior = load_history(lookup_email, ctx.fingerprint, path=path)
     trend = compute_trend(assessment, prior)
-    record_assessment(assessment, repos, source=source, path=path)
+    try:
+        append_entry(entry_from_assessment(assessment, ctx.fingerprint, source), path=path)
+    except OSError:
+        # Best-effort: a cache write hiccup never blocks the report itself.
+        pass
     return trend

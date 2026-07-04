@@ -22,6 +22,11 @@ class Commit:
     renames: list[tuple[str, str]] = field(default_factory=list)
     insertions: int = 0
     deletions: int = 0
+    # Identifies which repo a commit came from. Empty for a single-repo
+    # assessment; set per-repo by pipeline.assess_repos so that detectors keying
+    # on file-path overlap don't group commits from *different* repos that
+    # happen to touch identically-named files (README.md, __init__.py, ...).
+    repo_key: str = ""
 
     @property
     def files_changed(self) -> int:

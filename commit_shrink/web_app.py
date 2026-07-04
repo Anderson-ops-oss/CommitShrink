@@ -24,19 +24,14 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
-from commit_shrink import history
 from commit_shrink.card import build_card_model, render_card_html
 from commit_shrink.analyzer import collapse_cjk_whitespace
 from commit_shrink.collector import NotARepoError
+from commit_shrink.github_api import GitHubAPIError
 from commit_shrink.history import Trend
-from commit_shrink.pipeline import Assessment, NoCommitsError, assess_repo, load_config
-from commit_shrink.remote import (
-    CloneError,
-    RemoteAuthorRequiredError,
-    is_remote_spec,
-    local_repo,
-    require_author_for_remote,
-)
+from commit_shrink.pipeline import Assessment, NoCommitsError, load_config
+from commit_shrink.remote import CloneError, RemoteAuthorRequiredError, require_author_for_remote
+from commit_shrink.run import NoReposError, run_assessment
 from commit_shrink.report import MAX_EVIDENCE_LINES, MAX_PRESCRIPTIONS, MAX_RECORDS, ReportRenderer
 from commit_shrink.waiting import run_with_rotating_messages
 
@@ -363,21 +358,9 @@ if submitted:
         else:
 
             def _work():
-                with local_repo(
-                    path_input, days=int(days_input), until=until, author=author
-                ) as repo_path:
-                    ctx = history.load_context([repo_path])
-                    assessment = assess_repo(
-                        repo_path,
-                        days=int(days_input),
-                        until=until,
-                        author=author,
-                        cfg=cfg,
-                        techdebt_history=ctx.techdebt_index,
-                    )
-                    source = "remote" if is_remote_spec(path_input) else "local"
-                    trend = history.finalize(ctx, assessment, [repo_path], source=source)
-                return assessment, trend
+                return run_assessment(
+                    path_input, days=int(days_input), until=until, author=author, cfg=cfg
+                )
 
             # st.spinner shows one fixed string; a placeholder we rewrite in a
             # loop lets the waiting-room lines rotate while the (blocking) work
@@ -387,7 +370,7 @@ if submitted:
             waiting = st.empty()
             try:
                 try:
-                    assessment, trend = run_with_rotating_messages(
+                    result = run_with_rotating_messages(
                         _work,
                         rc["loading_messages"],
                         lambda msg: waiting.markdown(f"🩺 {msg}"),
@@ -397,6 +380,10 @@ if submitted:
                     waiting.empty()
             except CloneError as e:
                 st.error(rc["errors"]["clone_failed"].format(error=str(e)))
+            except GitHubAPIError as e:
+                st.error(rc["errors"]["user_lookup_failed"].format(error=str(e)))
+            except NoReposError:
+                st.error(rc["errors"]["no_public_repos"])
             except NotARepoError:
                 st.error(rc["errors"]["not_a_repo"])
             except NoCommitsError:
@@ -404,13 +391,21 @@ if submitted:
             except RuntimeError as e:
                 st.error(str(e))
             else:
-                st.session_state.assessment = assessment
-                st.session_state.trend = trend
+                st.session_state.assessment = result.assessment
+                st.session_state.trend = result.trend
+                # Persist the coverage note so a later language-toggle rerun (which
+                # re-renders from session_state without re-assessing) still shows it.
+                st.session_state.repo_coverage = (
+                    result.repo_count if result.discovered_count is not None else None
+                )
 
 assessment = st.session_state.assessment
 trend = st.session_state.trend
 if assessment is not None:
     render_report(assessment, cfg, trend)
+    coverage = st.session_state.get("repo_coverage")
+    if coverage is not None:
+        st.caption(rc["aggregate_note_fmt"].format(n=coverage))
 
     # Shareable "discharge summary" card: same ReportRenderer, so it can't drift
     # from the report above. Embedded in a sandboxed iframe; also downloadable.

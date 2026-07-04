@@ -253,6 +253,7 @@ report_copy:
   report_title_fmt: "Periodic Psychological Status Assessment · Assessment Week {week}"
   label_sep: ": "   # separator between a bold label and its value (zh uses U+3000)
   missing_data_note_fmt: "{code} {name}: {copy}"   # GIT-88.8 degradation line (zh uses U+FF1A)
+  aggregate_note_fmt: "This assessment covers {n} public repositories, merged into a single timeline."   # gh-user aggregate footnote
   loading_messages:   # waiting-room lines cycled while the report generates (wholesale-replaces the zh list)
     - "Sharpening the No. 2 pencils for your Rorschach test…"
     - "The doctor will see your git log now…"
@@ -386,6 +387,12 @@ report_copy:
       Assessment of another party's repository requires that the subject
       (author) be specified; this center does not presume sample ownership on
       the subject's behalf.
+    user_lookup_failed: >-
+      Remote user specimen acquisition failed: {error}. This center's sampling
+      range is bounded by network connectivity and GitHub API availability.
+    no_public_repos: >-
+      This user has no public repositories with activity in the assessment
+      window. This center cannot diagnose behavior that did not occur.
 
 # ------------------------------------------------------------
 # Fixed boilerplate copy (report skeleton).

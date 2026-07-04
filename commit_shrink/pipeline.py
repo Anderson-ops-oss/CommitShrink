@@ -119,30 +119,36 @@ class Assessment:
     masked_subjects: dict[str, str] = field(default_factory=dict)
 
 
-def assess_repo(
-    repo: Path,
-    days: int = 7,
-    until: datetime | None = None,
-    author: str | None = None,
-    cfg: dict | None = None,
-    techdebt_history: dict[str, str] | None = None,
-) -> Assessment:
-    cfg = cfg or load_config()
-    start, end = compute_window(days, until)
-
+def _gather(
+    repo: Path, start: datetime, end: datetime, author: str | None
+) -> tuple[list[Commit], list[Commit]]:
+    """Read one repo's log and split it into (window, period): `window` carries
+    FETCH_PADDING on both sides for the lookahead detectors; `period` is the
+    strict assessment window."""
     window = collect(repo, since=start - FETCH_PADDING, until=end + FETCH_PADDING, author=author)
     period = [c for c in window if start <= c.ts <= end]
-    if not period:
-        raise NoCommitsError(str(repo))
+    return window, period
 
-    # The report assesses a single patient: restrict every statistic and piece
-    # of evidence to the dominant author (or the --author filter's survivor).
-    patient_name, patient_email = Counter(
-        (c.author_name, c.author_email) for c in period
-    ).most_common(1)[0][0]
-    period = [c for c in period if c.author_email == patient_email]
-    window = [c for c in window if c.author_email == patient_email]
 
+def _dominant_author(period: list[Commit]) -> tuple[str, str]:
+    return Counter((c.author_name, c.author_email) for c in period).most_common(1)[0][0]
+
+
+def _build_assessment(
+    *,
+    window: list[Commit],
+    period: list[Commit],
+    cfg: dict,
+    techdebt_history: dict[str, str] | None,
+    patient_name: str,
+    patient_email: str,
+    start: datetime,
+    end: datetime,
+    rewrites: int | None,
+) -> Assessment:
+    """Run the analyzer + diagnoser over an already-selected commit set. Shared
+    by assess_repo (one repo, one patient) and assess_repos (a merged timeline
+    across repos)."""
     diagnoser = Diagnoser(cfg)
     scorer = SentimentScorer(cfg["lexicon_patch"], stoplist=diagnoser.stoplist)
     scores = {c.sha: scorer.score(c.message) for c in period}
@@ -150,7 +156,6 @@ def assess_repo(
     stats = compute_stats(period, scores, diagnoser.stoplist)
     fix_pattern = diagnoser.re_fix.pattern
     metrics = compute_metrics(period, scores, stats, cfg["metrics"], fix_pattern)
-    rewrites = count_rewrites(repo, start, end)
     diagnoses, notes = diagnoser.run(period, window, scores, stats, rewrites, techdebt_history)
     apply_diagnosis_burden(metrics, [d.severity for d in diagnoses])
 
@@ -169,4 +174,102 @@ def assess_repo(
         diagnoses=diagnoses,
         notes=notes,
         masked_subjects=masked_subjects,
+    )
+
+
+def assess_repo(
+    repo: Path,
+    days: int = 7,
+    until: datetime | None = None,
+    author: str | None = None,
+    cfg: dict | None = None,
+    techdebt_history: dict[str, str] | None = None,
+) -> Assessment:
+    cfg = cfg or load_config()
+    start, end = compute_window(days, until)
+
+    window, period = _gather(repo, start, end, author)
+    if not period:
+        raise NoCommitsError(str(repo))
+
+    # The report assesses a single patient: restrict every statistic and piece
+    # of evidence to the dominant author (or the --author filter's survivor).
+    patient_name, patient_email = _dominant_author(period)
+    period = [c for c in period if c.author_email == patient_email]
+    window = [c for c in window if c.author_email == patient_email]
+
+    return _build_assessment(
+        window=window,
+        period=period,
+        cfg=cfg,
+        techdebt_history=techdebt_history,
+        patient_name=patient_name,
+        patient_email=patient_email,
+        start=start,
+        end=end,
+        rewrites=count_rewrites(repo, start, end),
+    )
+
+
+def _dedupe_by_sha(commits: list[Commit]) -> list[Commit]:
+    """First occurrence wins; forks that share history don't double-count."""
+    seen: set[str] = set()
+    out: list[Commit] = []
+    for c in commits:
+        if c.sha not in seen:
+            seen.add(c.sha)
+            out.append(c)
+    return out
+
+
+def assess_repos(
+    repos: list[Path],
+    days: int = 7,
+    until: datetime | None = None,
+    author: str | None = None,
+    cfg: dict | None = None,
+    techdebt_history: dict[str, str] | None = None,
+) -> Assessment:
+    """Assess one person across several repos as a single merged commit
+    timeline (used by the `gh-user:` spec).
+
+    Deliberately different from assess_repo in two ways: (1) it does NOT
+    re-narrow to the single dominant email -- the caller has already filtered
+    each repo by --author, and a person's records legitimately span multiple
+    name/email identities across their repos, all of which should count; and
+    (2) reflog-based rewrite detection (GIT-88.8) is unavailable across a repo
+    set (each clone lacks the original local reflog), so it degrades exactly as
+    any remote assessment does. Commits are deduped by sha so shared/forked
+    history isn't counted twice.
+    """
+    cfg = cfg or load_config()
+    start, end = compute_window(days, until)
+
+    windows: list[Commit] = []
+    periods: list[Commit] = []
+    for repo in repos:
+        w, p = _gather(repo, start, end, author)
+        # Tag each commit with its source repo so path-overlap detectors don't
+        # group same-named files across different repos (p ⊂ w, same objects).
+        for c in w:
+            c.repo_key = str(repo)
+        windows.extend(w)
+        periods.extend(p)
+
+    period = _dedupe_by_sha(sorted(periods, key=lambda c: c.ts))
+    window = _dedupe_by_sha(sorted(windows, key=lambda c: c.ts))
+    if not period:
+        raise NoCommitsError(", ".join(str(r) for r in repos))
+
+    patient_name, patient_email = _dominant_author(period)
+    return _build_assessment(
+        window=window,
+        period=period,
+        cfg=cfg,
+        techdebt_history=techdebt_history,
+        patient_name=patient_name,
+        patient_email=patient_email,
+        start=start,
+        end=end,
+        rewrites=None,
     )
