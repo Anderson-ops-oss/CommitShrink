@@ -214,7 +214,7 @@ def render_ekg_chart(assessment: Assessment, cfg: dict) -> None:
         for c in commits
     ]
 
-    trough_sha = min(assessment.scores, key=assessment.scores.get)
+    trough_sha = min(assessment.scores, key=lambda sha: assessment.scores[sha])
     trough = next(c for c in commits if c.sha == trough_sha)
     trough_idx = commits.index(trough)
 

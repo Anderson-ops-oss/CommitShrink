@@ -128,6 +128,20 @@ class TestEnglishAssessmentRenders:
         assert "quantitative-assessment genre" in text
         assert "quantitative- assessment" not in text  # >- fold must not split the hyphen
 
+    def test_english_trend_note_spaces_the_extrapolation_sentence(self):
+        """The decline-streak sentence and the extrapolation sentence are two
+        appended clauses; in English they must not glue (".Extrapolating").
+        The separating space lives in the en locale (zh needs none). Rendered
+        without a Trend, the report omits this line, so it is checked directly.
+        """
+        from types import SimpleNamespace
+
+        renderer = ReportRenderer(load_config("en"))
+        trend = SimpleNamespace(composite_delta=-2, decline_streak=2, extrapolated_week=30)
+        note = renderer._trend_note(trend)
+        assert "decline. Extrapolating" in note
+        assert "decline.Extrapolating" not in note
+
     def test_chinese_report_still_renders(self, fixture_repo):
         repo, _start, period_end = fixture_repo
         cfg = load_config("zh")

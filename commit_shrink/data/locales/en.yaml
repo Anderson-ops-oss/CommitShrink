@@ -286,9 +286,11 @@ report_copy:
     composite_fmt: "Composite Mental Health Score for this period: {score} / 100"
     period_delta_fmt: "{delta} points versus last week"
     decline_streak_fmt: ", {n} consecutive weeks of decline."
-    extrapolation_fmt: >-
-      Extrapolating from the current slope, the score is projected to reach
-      the floor of this instrument (0 points) by Assessment Week {week}.
+    # Leading space: this clause is appended right after decline_streak_fmt
+    # (which ends in a period), so it must not glue to it. zh needs no space
+    # (a fullwidth "。" already separates), hence the split lives here, not in
+    # report.py's concatenation.
+    extrapolation_fmt: " Extrapolating from the current slope, the score is projected to reach the floor of this instrument (0 points) by Assessment Week {week}."
     impression: Clinical Impression
     impression_fmt: >-
       The subject committed {n} times during this period, of which {night}
