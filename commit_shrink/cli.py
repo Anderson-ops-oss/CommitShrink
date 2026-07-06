@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
+
+load_dotenv()
 
 from .card import build_card_model, render_card_html
 from .collector import NotARepoError

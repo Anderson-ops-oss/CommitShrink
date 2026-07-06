@@ -97,7 +97,7 @@ commit-shrink https://github.com/owner/repo --author dev@example.com
 commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
 
 # Assess yourself, including PRIVATE repos (needs a token; see below):
-export GITHUB_TOKEN=ghp_...        # or GH_TOKEN
+export GITHUB_TOKEN=ghp_...        # or GH_TOKEN — or put it in a .env file (see below)
 commit-shrink gh-user:@me --author you@example.com --days 30
 ```
 
@@ -106,6 +106,15 @@ Remote specs (a `github:owner/repo` shorthand, or any `https://`/`git@` clone UR
 A `gh-user:<name>` spec goes one step further: it discovers the user's public repositories (owned, most-recently-pushed first), assesses them all as a *single merged commit timeline*, and anchors the cross-run trend to the person rather than any one repo — so the trend survives the user adding or archiving repos. `--author` is required here too (pass an email); the scope is the user's own public repos with activity in the window.
 
 **Assessing yourself, including private repos.** `gh-user:@me` assesses *your own* repos — public **and** private — as one merged timeline. It needs a GitHub token in the environment (`GITHUB_TOKEN` or `GH_TOKEN`, never a command-line flag): a classic token with the `repo` scope, or a fine-grained token with **Contents: read** + **Metadata: read** on the repos you want covered. The token is passed to git via the environment, so it never appears in a URL, in `ps` output, or in your shell history; the history cache stores only diagnosis metadata (codes, scores), never code. A token is also useful on `gh-user:<someone-else>` — there it just lifts the anonymous 60-requests/hour rate limit (handy on a shared/NAT'd network like a campus), and never grants access to anyone else's private repos (GitHub enforces that server-side). You can check your remaining anonymous quota at `https://api.github.com/rate_limit`.
+
+**`.env` file support.** Instead of exporting the token in every shell session, you can place it in a `.env` file at the root of your working directory — CommitShrink loads it automatically on startup:
+
+```
+# .env  (never commit this file)
+GITHUB_TOKEN=ghp_...
+```
+
+The `.env` file is already listed in `.gitignore`. The token precedence is: existing shell environment → `.env` file.
 
 Want to see it run without risking your own commit history? Generate a clinically rich demo repository and point the tool at it:
 

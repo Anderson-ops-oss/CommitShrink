@@ -19,6 +19,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components

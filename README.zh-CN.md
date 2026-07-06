@@ -95,7 +95,7 @@ commit-shrink https://github.com/owner/repo --author dev@example.com
 commit-shrink gh-user:torvalds --author torvalds@linux-foundation.org --days 30
 
 # 评估你自己，含私有仓库（需要 token，见下）：
-export GITHUB_TOKEN=ghp_...        # 或 GH_TOKEN
+export GITHUB_TOKEN=ghp_...        # 或 GH_TOKEN——也可以写在 .env 文件里（见下）
 commit-shrink gh-user:@me --author you@example.com --days 30
 ```
 
@@ -104,6 +104,15 @@ commit-shrink gh-user:@me --author you@example.com --days 30
 `gh-user:<用户名>` 更进一步：它会发现该用户的公开仓库（owned，按最近推送排序），把它们**合并成一条提交时间线**一起评估，并让跨周趋势锚定到"人"而非某个仓库——这样用户新增或归档仓库时趋势也不会断。同样必须指定 `--author`（填邮箱）；范围是该用户在窗口内有活动的自有公开仓库。
 
 **评估你自己，含私有仓库。** `gh-user:@me` 评估**你自己**的仓库——公开**和**私有——合并为一条时间线。它需要环境里有 GitHub token（`GITHUB_TOKEN` 或 `GH_TOKEN`，**绝不用命令行参数**）：classic token 勾 `repo` scope，或 fine-grained token 对目标仓库授予 **Contents: read** + **Metadata: read**。token 通过环境变量传给 git，所以**不会出现在 URL、`ps` 输出或 shell 历史里**；历史缓存也只存诊断元数据（病症码、分数），**从不存代码**。token 对 `gh-user:<别人>` 也有用——那里它只是把匿名的 60 次/小时限额提上去（校园网这种共享 IP 尤其有用），并且**永远无法访问别人的私有仓库**（GitHub 服务端强制）。你的匿名剩余额度可在 `https://api.github.com/rate_limit` 查看。
+
+**`.env` 文件支持。** 不想每次开终端都 `export`，可以把 token 写进工作目录根目录下的 `.env` 文件——CommitShrink 启动时会自动加载：
+
+```
+# .env  （不要提交这个文件）
+GITHUB_TOKEN=ghp_...
+```
+
+`.env` 已被加入 `.gitignore`，不会意外提交。优先级：shell 环境变量 → `.env` 文件。
 
 不想拿自己的提交历史冒险？生成一个"病情丰富"的演示仓库直接体验：
 

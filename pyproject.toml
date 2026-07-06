@@ -13,6 +13,7 @@ dependencies = [
     "rich>=13.7",
     "PyYAML>=6.0",
     "vaderSentiment>=3.3.2",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

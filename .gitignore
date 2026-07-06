@@ -1,12 +1,15 @@
 __pycache__/
 *.pyc
 .venv
+.env
+.env.local
 *.egg-info/
 .pytest_cache/
 dist/
 build/
 fixture-repo/
 .venv.nosync/
+.vscode/
 
 bug_need_fix.md
 plan-commit-shrink.md
