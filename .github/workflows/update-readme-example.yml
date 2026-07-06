@@ -1,0 +1,39 @@
+name: Refresh live README example
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # collector.py windows on real git log history, not just the tip commit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Regenerate README examples
+        run: python scripts/update_readme_examples.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "commit-shrink-bot"
+          git config user.email "commit-shrink-bot@users.noreply.github.com"
+          if git diff --quiet -- README.md README.zh-CN.md .commit-shrink-cache; then
+            echo "no changes"
+            exit 0
+          fi
+          git add README.md README.zh-CN.md .commit-shrink-cache
+          git commit -m "chore: refresh live report example [skip ci]"
+          git push

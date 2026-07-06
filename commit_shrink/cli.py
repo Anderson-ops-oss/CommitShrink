@@ -26,6 +26,7 @@ from .pipeline import SUPPORTED_LANGS, NoCommitsError, load_config
 from .remote import RemoteAuthorRequiredError, require_author_for_remote
 from .remote import CloneError
 from .report import ReportRenderer
+from .report_markdown import render_report_markdown
 from .run import NoReposError, TokenRequiredError, run_assessment
 from .waiting import run_with_rotating_messages
 
@@ -45,6 +46,9 @@ def assess(
     lang: str = typer.Option("en", help="Report language: 'en' or 'zh'."),
     card: Optional[str] = typer.Option(
         None, "--card", help="Also write a shareable HTML summary card to this path."
+    ),
+    markdown: Optional[str] = typer.Option(
+        None, "--markdown", help="Also write the full report as GitHub-Flavored Markdown to this path."
     ),
 ) -> None:
     """Generate a developer mental-health assessment from the repo's git log."""
@@ -104,6 +108,11 @@ def assess(
             render_card_html(build_card_model(result.assessment, renderer)), encoding="utf-8"
         )
         console.print(rc["card"]["saved_fmt"].format(path=card))
+    if markdown:
+        Path(markdown).write_text(
+            render_report_markdown(result.assessment, cfg, result.trend), encoding="utf-8"
+        )
+        console.print(rc["markdown_saved_fmt"].format(path=markdown))
 
 
 def _ensure_utf8_output() -> None:

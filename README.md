@@ -20,40 +20,115 @@ The sentiment-analysis techniques underneath are not novel — this has been don
 
 **A note on language.** The tool currently generates reports in Chinese — the joke was built for a Chinese-language commit culture first, and the full symptom taxonomy in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml) is written in Chinese. The excerpt below is an English rendering for readers of this document; it is not literal tool output. If you read Chinese, see [README.zh-CN.md](README.zh-CN.md), whose sample section is much closer to what you'll actually see on your screen.
 
-## Sample Report (illustrative excerpt)
+## Sample Report (live)
 
-<table>
-<tr><td>Patient</td><td>Demo Developer &lt;dev@example.com&gt;</td></tr>
-<tr><td>Assessment Period</td><td>2026-06-22 (Mon) – 2026-06-28 (Sun)</td></tr>
-<tr><td>Valid Sample</td><td>47 commits (none excluded; 18 low-information samples counted toward the alexithymia index)</td></tr>
-<tr><td>Method</td><td>Non-invasive naturalistic behavioral observation (patient was unaware of the assessment during data collection; social desirability bias = 0, Hawthorne effect = 0)</td></tr>
-<tr><td>Instrument</td><td>CommitShrink v0.1 · cross-cultural validity certified (n = 1) · test-retest reliability r = 1.00</td></tr>
-</table>
+The section below is not a mock-up — it's this repo's *own* CommitShrink assessment, regenerated weekly by [a GitHub Action](.github/workflows/update-readme-example.yml) straight from its git log. Its section layout follows the project's golden sample, [`docs/report-sample.md`](docs/report-sample.md), which defines exactly what a correct report must contain; generate your own with the demo repository below.
 
-**Chief Complaint** None. Patient reported no subjective distress and did not seek evaluation; the specimen was collected proactively by this system. Insight: partially present (see Record 1, 03:52).
+<!-- COMMITSHRINK:LIVE-EXAMPLE:START -->
 
-**Primary Diagnosis** GIT-42.2 Compulsive Fix Disorder (severe, progressive; this period's worst single episode reached Grade IV — see Record 1)
-**Secondary Diagnoses** GIT-23.5 Nocturnal Despair Tendency (moderate) | GIT-11.2 Commit Alexithymia (moderate)
-**Other Clinical Concerns** GIT-70.7 Magical Thinking (single episode, see Record 3)
+_Regenerated automatically from this repo's own commits — last updated 2026-07-06 10:17 UTC._
 
-**Composite Mental Health Score: 34 / 100** (metric baseline 45 − diagnosis burden 11)
-Down 9 points from last period; third consecutive week of decline. Extrapolating the current slope, the patient is projected to hit the scale's floor by assessment week 30.
+## CommitShrink™ Center for Developmental Mental Health Assessment
 
-#### Record 1 | GIT-42.2 Compulsive Fix Disorder · Severity IV (Extremely Severe)
+**Periodic Psychological Status Assessment · Assessment Week 28**
 
-**Episode Window** Jun 25 (Thu), 02:14 – 03:52 — 98 minutes
+| | |
+|---|---|
+| Subject | Anderson-ops-oss <u3606584@connect.hku.hk> |
+| Assessment Period | 2026-06-30 — 2026-07-06 |
+| Valid Sample | 20 commits (no exclusions; of which 0 low-information specimens have been included in the alexithymia statistics) |
+| Administration Method | Non-invasive naturalistic behavioral observation (the subject was unaware of assessment during data generation; social-desirability bias = 0, Hawthorne effect = 0). |
+| Assessment Instrument | CommitShrink v0.1 · cross-cultural reliability and validity established (n = 1) · test-retest reliability r = 1.00 |
+| Report Date | 2026-07-06 18:17 (system-generated; no experimenter effect) |
+| Report No. | CS-2026-W28-0001 |
+
+---
+
+### I. Overall Diagnosis
+
+**Chief Complaint**: None. The subject denies any subjective distress and exhibits no help-seeking behavior; the sample was acquired at this center's own initiative.
+
+**Primary Diagnosis**: GIT-55.4 Work-Life Boundary Dissolution (Extreme)
+**Secondary Diagnosis**: GIT-36.6 Binge Committing (Silence-Purge Type) (Moderate)
+
+**Composite Mental Health Score for this period: 77 / 100**
+(+0 points versus last week)
+
+**Clinical Impression**: The subject committed 20 times during this period, of which 1 occurred between 00:00 and 05:59. 
+
+---
+
+### II. Quantitative Indicators
+
+| Indicator | This Period | Last Period | Reference Range | Norm Percentile |
+| --- | --- | --- | --- | --- |
+| Nocturnal Despair Index | **0.8** | 0.8 | < 3.0 | Higher than 16% of comparable samples |
+| Work-Life Boundary Integrity | **38%** | 38% | > 70% | Lower than 81% of comparable samples |
+| Emotional Baseline | **+0.17** | +0.17 | ≥ 0 | Lower than 33% of comparable samples |
+| Fix-Loop Density | **1.7** | 1.7 | ≤ 2.0 | Higher than 46% of comparable samples |
+| Commit Alexithymia Index | **0%** | 0% | < 15% | Higher than 20% of comparable samples |
+
+<sub>Norms derived from this center's proprietary fictional normative database (n = 10,000 fictional developers). The fictional distribution has been carefully calibrated to ensure the subject retains ample room for improvement at all times.</sub>
+
+---
+
+### III. Symptom Episode Records (Selected Clinical Evidence)
+
+#### Record 1 | GIT-55.4 Work-Life Boundary Dissolution · Severity IV (Extreme)
+
+**Episode Window**: 07-04 00:10 – 18:29
 
 ```
-02:14  a3f9c21  fix login bug
-02:31  8be0d47  fix login bug again
-02:58  f10a9b3  really fix login bug
-03:22  90cc1ea  PLEASE WORK
-03:52  6d2e8f0  ok it was a typo
+07-04 00:10  445aae1  refactor: render report language at display time; add web language toggle
+07-04 10:54  4b898dd  fix: use an emoji literal for the Streamlit page_icon
+07-04 13:10  c781d8c  feat: clone remote repos blobless and backfill only the window's diff blobs
+07-04 13:38  b5dd86c  feat: rotate playful waiting-room messages while the report generates
+07-04 13:40  ab732e7  fix: type-clean EKG trough lookup and space the English trend clause
+07-04 14:30  d3fb8ef  fix: drop dangling plan-commit-shrink.md references from docstrings
 ```
 
-**Clinical Interpretation** Five interventions on the same issue within 98 minutes. Language mode progressed through four stages — statement (02:14), reiteration (02:31), emphasis (02:58), supplication (03:22) — consistent with this disorder's typical course. Grading basis: chain length 5, an all-caps sample present in the chain, and the entire episode falling within 00:00–05:59 — all three Grade IV criteria met simultaneously. Insight was recovered at 03:52 ("ok it was a typo"); recovery was accompanied by mild loss of self-esteem.
+**Clinical Interpretation**: Weekend commits account for 55%. In the subject's temporal system, "the weekend" has degraded into a purely calendrical concept.
 
-> This excerpt is drawn from the project's golden sample, [`docs/report-sample.md`](docs/report-sample.md), which defines exactly what a correct report must contain. Every number in it is reproducible from the rules in `symptoms.yaml` — generate your own with the demo repository below.
+#### Record 2 | GIT-36.6 Binge Committing (Silence-Purge Type) · Severity II (Moderate)
+
+**Episode Window**: 07-02 18:30
+
+```
+07-02 18:30  a9063b1  feat: add report generation module and sample report documentation
+```
+
+**Clinical Interpretation**: After ≥ 72 hours of silence, a single purge of changes across 15 files. This center has not yet observed a human sample capable of reviewing a change of that magnitude in one sitting.
+
+---
+
+### IV. Emotional EKG
+
+| 06-30 | 07-01 | 07-02 | 07-03 | 07-04 | 07-05 | 07-06 |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| · | · | ███ | ▅▅▅ | ▅▅▅ | · | ▆▆▆ |
+
+Emotional low point: 07-04 14:30 ("feat: add two disorders (GIT-45.0, GIT-00.1) and a shareable HTML card", corrected sentiment score -0.79)
+
+---
+
+### V. Prescription
+
+1. The introduction of external constraints to restore the boundary is advised. This center does not recommend willpower-based interventions — a conclusion derived from a retrospective cohort study of the subject's prior medical record (git log).
+2. Smaller commits are advised. The ideal size of a commit is the size the subject would dare to describe honestly in its message.
+3. [Social Support] Restating the problem aloud to a rubber duck is advised. This center's research (unpublished, n = 1) indicates efficacy non-inferior to restating it to a colleague, with no incurred social debt.
+4. [Referral Note] This center holds no prescribing authority. Caffeine intake falls outside the jurisdiction of this report and remains a matter between the subject and the subject's cardiologist.
+
+---
+
+### VI. Disclaimer & Follow-up
+
+This report is generated by an automated system from the git log. It does not constitute medical advice, though it may constitute code-review advice. All "conditions" herein are a parody of the quantitative-assessment genre; certain diagnostic names are transplants of clinical terminology into the git domain. The subject of this report is the commit history, not any person, and it makes no reference to any real mental disorder or to any person affected by one. Should this report cause offense, please note that all clinical evidence was personally signed by the subject, at the time of the offense (git commit). This report is answerable only for the specimens submitted within the present assessment period; behavior outside the sample — including evidence destroyed via force-push — falls outside its scope. This center accepts only specimens submitted voluntarily by the subject; any diagnosis derived from specimens submitted on a colleague's behalf is void, and the act itself constitutes a condition this center has not yet coded.
+
+**Follow-up**: Automatically scheduled upon the next git push.
+**Quality Control**: This report has passed dual review (by this system and a copy of this system).
+**Attending System**: CommitShrink v0.1 | License No. sha256:c0ffee…
+
+<!-- COMMITSHRINK:LIVE-EXAMPLE:END -->
 
 ## How It Works
 

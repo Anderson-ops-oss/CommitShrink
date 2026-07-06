@@ -254,6 +254,7 @@ report_copy:
   label_sep: ": "   # separator between a bold label and its value (zh uses U+3000)
   missing_data_note_fmt: "{code} {name}: {copy}"   # GIT-88.8 degradation line (zh uses U+FF1A)
   aggregate_note_fmt: "This assessment covers {n} public repositories, merged into a single timeline."   # gh-user aggregate footnote
+  markdown_saved_fmt: "Report written to {path}"   # --markdown export footnote
   loading_messages:   # waiting-room lines cycled while the report generates (wholesale-replaces the zh list)
     - "Sharpening the No. 2 pencils for your Rorschach test…"
     - "The doctor will see your git log now…"

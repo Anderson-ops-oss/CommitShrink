@@ -517,6 +517,7 @@ report_copy:
   label_sep: "　"   # 标签与取值之间的分隔（全角空格）；英文版覆盖为 ": "
   missing_data_note_fmt: "{code} {name}：{copy}"   # GIT-88.8 缺数据降级行；英文版用半角冒号
   aggregate_note_fmt: "本次评估覆盖 {n} 个公开仓库，已合并为一条时间线。"   # gh-user 聚合模式脚注
+  markdown_saved_fmt: 报告已写入 {path}   # --markdown 导出脚注
   loading_messages:   # 生成报告时轮播的候诊等待语；英文版整体覆盖（见 locales/en.yaml）
     - 正在调阅您凌晨三点的提交记录……
     - 正在校准愧疚度测量仪……
