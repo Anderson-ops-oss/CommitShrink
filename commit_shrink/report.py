@@ -33,6 +33,7 @@ MAX_EVIDENCE_LINES = 6
 
 class ReportRenderer:
     def __init__(self, cfg: dict):
+        self.lang = cfg.get("lang", "zh")  # for renderers that emit a lang tag (e.g. the card)
         self.rc = cfg["report_copy"]
         self.bp = cfg["boilerplate"]
         self.meta = cfg["meta"]

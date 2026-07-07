@@ -31,6 +31,7 @@ from .models import Commit
 SEVERITY_ORDER = {"I": 1, "II": 2, "III": 3, "IV": 4}
 SEGMENT_GAP = timedelta(hours=2)
 NIGHT_CHAIN_MIN = 5
+WEEKEND_IV_MIN = 5  # minimum weekend commits before boundary_dissolution can reach IV
 _RECURSIVE_REVERT_RE = re.compile(r'Revert\s+"Revert', re.IGNORECASE)
 _VERSION_3PLUS_RE = re.compile(r"\bv(?:[3-9]|[1-9]\d+)\b", re.IGNORECASE)
 
@@ -278,14 +279,20 @@ class Diagnoser:
         by_mood = stats.night_count > 0 and stats.night_mood < -0.3
         if not (by_ratio or by_mood):
             return None
-        if stats.night_ratio > 0.50:
+        # Escalation past grade I requires the night mood to actually be down: a
+        # night owl whose small-hours commits read neutral or cheerful is a
+        # chronotype, not distress. Schedule alone (non-negative night_mood) caps
+        # at I. This also keeps the mood-only entry path (ratio <=15%) at I.
+        if stats.night_mood >= 0:
+            sev = "I"
+        elif stats.night_ratio > 0.50:
             sev = "IV"
         elif stats.night_ratio > 0.35:
             sev = "III"
         elif stats.night_ratio > 0.25:
             sev = "II"
         else:
-            sev = "I"  # also covers the mood-only path per the yaml rule
+            sev = "I"
         # The "below daytime baseline" claim needs actual daytime samples.
         has_day_samples = stats.total > stats.night_count
         show_mood = bool(
@@ -307,7 +314,12 @@ class Diagnoser:
     def _boundary(self, period: list[Commit], stats: PeriodStats) -> Diagnosis | None:
         if stats.weekend_ratio <= 0.20 and stats.weekend_count <= stats.weekday_count:
             return None
-        if stats.weekend_count > stats.weekday_count:
+        # IV needs a genuinely extreme, non-trivial weekend share. A bare
+        # weekend_count > weekday_count graded a 6-vs-5 weekend-leaning hobby repo
+        # "most severe" -- which reads as a bug, not a joke, since weekend work on
+        # a side project is the boundary *working*. Require a strong majority AND
+        # enough volume for the top grade.
+        if stats.weekend_ratio > 0.60 and stats.weekend_count >= WEEKEND_IV_MIN:
             sev = "IV"
         elif stats.weekend_ratio > 0.45:
             sev = "III"

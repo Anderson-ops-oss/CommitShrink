@@ -146,8 +146,8 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 需要 Python 3.10+。
 
 ```bash
-git clone https://github.com/<your-username>/commit-shrink.git
-cd commit-shrink
+git clone https://github.com/Anderson-ops-oss/CommitShrink.git
+cd CommitShrink
 ```
 
 接下来任选 `venv` 或 `conda` 创建环境：

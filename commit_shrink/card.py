@@ -47,6 +47,7 @@ def build_card_model(assessment: Assessment, renderer: ReportRenderer) -> dict:
         rx = ""
     score = assessment.metrics["composite_score"].display
     return {
+        "lang": renderer.lang,
         "center_name": rc["center_name"],
         "case_no": rc["header_values"]["report_no_fmt"].format(
             year=assessment.period_end.year, week=week
@@ -79,7 +80,7 @@ def render_card_html(model: dict) -> str:
         else ""
     )
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="{e(model.get("lang", "en"))}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {{ color-scheme: light; }}

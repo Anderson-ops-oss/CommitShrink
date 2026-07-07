@@ -111,7 +111,14 @@ def _parse_numstat_path(path: str) -> tuple[str, tuple[str, str] | None]:
         old_path = f"{prefix}{brace_match.group('old')}{suffix}".replace("//", "/")
         new_path = f"{prefix}{brace_match.group('new')}{suffix}".replace("//", "/")
         return new_path, (old_path, new_path)
-    old_path, new_path = path.split(" => ", 1)
+    parts = path.split(" => ", 1)
+    if len(parts) != 2:
+        # A bare "=>" without git's rename spacing (e.g. "weird=>name.txt") is
+        # an ordinary filename, not a rename -- git always emits " => " for a
+        # rename. The guard above keys on the bare arrow, so such a path reaches
+        # here; treat it as a plain path instead of crashing on the unpack.
+        return path, None
+    old_path, new_path = parts
     return new_path, (old_path, new_path)
 
 

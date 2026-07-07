@@ -87,6 +87,7 @@ def load_config(lang: str = "zh") -> dict:
         cfg = yaml.safe_load(f)
     if lang and lang != "zh":
         _apply_locale(cfg, lang)
+    cfg["lang"] = lang or "zh"  # recorded so renderers can emit correct lang tags
     return cfg
 
 
@@ -157,7 +158,7 @@ def _build_assessment(
     fix_pattern = diagnoser.re_fix.pattern
     metrics = compute_metrics(period, scores, stats, cfg["metrics"], fix_pattern)
     diagnoses, notes = diagnoser.run(period, window, scores, stats, rewrites, techdebt_history)
-    apply_diagnosis_burden(metrics, [d.severity for d in diagnoses])
+    apply_diagnosis_burden(metrics, [(d.id, d.severity) for d in diagnoses])
 
     masked_subjects = {c.sha: diagnoser.mask(c.subject)[0] for c in period}
 

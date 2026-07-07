@@ -18,7 +18,7 @@ It ingests your `git log`, scores the emotional trajectory of every commit messa
 
 The sentiment-analysis techniques underneath are not novel — this has been done before, in academic papers and weekend projects alike. What CommitShrink contributes is commitment to the bit: the diagnostic codes, the deadpan clinical prose, the fictional norm database calibrated against 10,000 fictional developers, and a two-reviewer quality control sign-off performed by one program and a copy of itself.
 
-**A note on language.** The tool currently generates reports in Chinese — the joke was built for a Chinese-language commit culture first, and the full symptom taxonomy in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml) is written in Chinese. The excerpt below is an English rendering for readers of this document; it is not literal tool output. If you read Chinese, see [README.zh-CN.md](README.zh-CN.md), whose sample section is much closer to what you'll actually see on your screen.
+**A note on language.** CommitShrink generates reports in English by default (`--lang en`) and in Chinese with `--lang zh`. The joke was built for a Chinese-language commit culture first, so the full symptom taxonomy in [`commit_shrink/data/symptoms.yaml`](commit_shrink/data/symptoms.yaml) is authored in Chinese, with the English copy overlaid from [`commit_shrink/data/locales/en.yaml`](commit_shrink/data/locales/en.yaml). The sample below is literal English tool output, regenerated from this repo's own git log — not a hand-written rendering. If you read Chinese, see [README.zh-CN.md](README.zh-CN.md).
 
 ## Sample Report (live)
 
@@ -149,7 +149,7 @@ Requires Python 3.10+.
 
 ```bash
 git clone https://github.com/Anderson-ops-oss/CommitShrink.git
-cd commit-shrink
+cd CommitShrink
 ```
 
 Then create an environment with either `venv` or `conda`:

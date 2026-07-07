@@ -68,7 +68,10 @@ metrics:
   - id: emotional_baseline
     name: 情绪基线
     scale: −1 ~ +1
-    formula: 全部 message 的 VADER compound 均值（中文词条与校正项见 lexicon_patch）
+    formula: >-
+      全部 message 的 VADER compound 均值（中文词条与校正项见 lexicon_patch）。
+      fix/bug/crash/broken/revert/error 等例行工程词已在 VADER 词表中置 0，
+      避免把"软件工作的日常用语"误读为负面情绪。
     reference: "≥ 0"
     norm: {dist: normal, mean: 0.0, sd: 0.39, direction: lower_is_worse}
   - id: fix_loop_density
@@ -87,13 +90,15 @@ metrics:
     name: 心理健康综合评分
     scale: 0–100
     formula: >-
-      指标基础分 base = 100 × (1 − Σ wᵢ·badᵢ)。
-      bad_绝望 = 指数/10；bad_边界 = 1 − 完整度；bad_情绪 = max(0, −情绪基线)；
+      指标基础分 base = clamp[0,100]( 100 × (1 − Σ wᵢ·badᵢ) )。
+      bad_绝望 = 指数/10；bad_边界 = 1 − 完整度；
+      bad_情绪 = max(−0.3, −情绪基线)（情绪基线为正时给予封顶 +0.3 的"信用分"——
+      好情绪能挣回几分，而非一律清零）；
       bad_循环 = min(1, max(0, (密度 − 2) / 6))；bad_述情 = 述情指数（比例值）。
       权重 w：绝望 0.3 / 边界 0.2 / 情绪 0.2 / 循环 0.2 / 述情 0.1。
-      确诊负担 burden = Σ 病症严重度权重（I=1 / II=2 / III=4 / IV=6），封顶 35。
+      确诊负担 burden = Σ 病症严重度权重（I=1 / II=2 / III=4 / IV=6），封顶 35；
+      其中已在量化指标里计过分的病症（GIT-23.5/55.4/42.2/11.2）负担减半，同一行为不罚两次。
       score = max(0, base − burden)——指标再漂亮，确诊单不会说谎。
-      样张验证：base ≈ 45（0.78/0.69/0.34/0.367/0.38），burden = 11（IV+II+II+I）→ 34。
     reference: ≥ 70（本中心尚未观测到该区间的真实样本）
 
 # ------------------------------------------------------------
@@ -211,10 +216,11 @@ symptoms:
       type: ratio
       rule: 00:00–05:59 提交占比 > 15%，或深夜时段情绪均值 < −0.3
     severity:
-      I: 占比 > 15%，或仅由情绪路径触发（占比 ≤15% 且深夜情绪均值 < −0.3）
-      II: '> 25%'
-      III: '> 35%'
-      IV: '> 50%'
+      # 升级到 II 以上要求深夜情绪均值 < 0：纯作息（情绪不为负）封顶 I——作息不是病。
+      I: 占比 > 15% 但深夜情绪均值 ≥ 0；或仅由情绪路径触发（占比 ≤15% 且深夜情绪均值 < −0.3）
+      II: 占比 > 25% 且深夜情绪均值 < 0
+      III: 占比 > 35% 且深夜情绪均值 < 0
+      IV: 占比 > 50% 且深夜情绪均值 < 0
     diagnosis: >-
       深夜提交占比 {ratio}。{night_mood_note}现有证据不支持黑暗直接产生缺陷的假说，
       但支持其参与修复决策的假说。
@@ -233,7 +239,7 @@ symptoms:
       I: '> 20%'
       II: '> 30%'
       III: '> 45%'
-      IV: 周末提交数超过工作日
+      IV: 周末占比 > 60% 且周末提交数 ≥ 5（需强多数 + 足够样本；小样本 6:5 不再直接顶格）
     diagnosis: >-
       周末提交占比 {ratio}。"周末"在受检者的时间体系中已退化为纯粹的日历学概念。
     prescription: >-
@@ -290,7 +296,9 @@ symptoms:
       type: ratio
       rule: >-
         message 归一化（lower + strip + 剥离结尾标点）后命中停用词表，
-        或长度 < 4 字符，记为低信息量样本；按周期占比确诊。
+        或长度低于阈值（拉丁文本 < 4 字符；含 CJK 文本 < 2 字符——
+        单个汉字信息量远高于单个拉丁字母，"加日志"这类 3 字提交不应记为低信息量），
+        记为低信息量样本；按周期占比确诊。
       stoplist: [".", "..", update, updates, fix, wip, test, tmp, temp, asdf, misc, stuff, changes, 改, 更新, 提交, "1"]
     severity:
       I: 占比 > 15%

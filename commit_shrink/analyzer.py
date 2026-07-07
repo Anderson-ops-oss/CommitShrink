@@ -24,6 +24,11 @@ from .models import Commit
 
 _TRAILING_PUNCT = ".!?。！？…"
 
+# Upper bound on how much a positive emotional baseline can lift the composite
+# (as a negative "bad" term, weight 0.2 -> at most +6 points). Keeps the score's
+# subtractive character while letting genuinely upbeat commit tone matter.
+BASELINE_CREDIT_CAP = 0.3
+
 # CJK ideographs, CJK punctuation, fullwidth forms, and common typographic
 # marks used in the Chinese copy (em-dash, curly quotes, ellipsis).
 _CJK_CLASS = r"[一-鿿　-〿＀-￯—‘’“”…]"
@@ -57,7 +62,15 @@ def normalize_message(message: str) -> str:
 
 def is_low_info(message: str, stoplist: list[str]) -> bool:
     norm = normalize_message(message)
-    return norm in {str(s).lower() for s in stoplist} or len(norm) < 4
+    if norm in {str(s).lower() for s in stoplist}:
+        return True
+    # The bare length floor is script-aware: a CJK character carries far more
+    # information than a Latin one, so an informative 3-char Chinese subject
+    # ("加日志"/"改样式"/"补测试") must not read as "unable to convey semantic
+    # content." Latin text keeps the <4 rule; CJK text uses <2 (the stoplist
+    # still catches genuinely empty ones like 改/更新/提交).
+    threshold = 2 if has_cjk(norm) else 4
+    return len(norm) < threshold
 
 
 def techdebt_hash(normalized_message: str) -> str:
@@ -88,9 +101,24 @@ def is_scream(message: str, stoplist: list[str]) -> bool:
     )
 
 
+# Routine engineering vocabulary VADER reads as English negativity. "fix broken
+# build" / "revert crashing migration" describe the everyday nouns and verbs of
+# software work, not emotional disclosure -- zero them out so the baseline
+# measures mood, not the dictionary of the job. (Genuine-affect words like
+# "hate", "love", "please", "disaster" stay untouched.)
+_ROUTINE_VOCAB = (
+    "fix", "fixed", "fixes", "fixing", "bug", "bugs", "crash", "crashed",
+    "crashes", "crashing", "fail", "failed", "failing", "fails", "broken",
+    "break", "breaks", "revert", "reverts", "reverted", "error", "errors",
+)
+
+
 class SentimentScorer:
     def __init__(self, lexicon_cfg: dict, stoplist: list[str] | None = None):
         self._vader = SentimentIntensityAnalyzer()
+        # Instance-local lexicon edit -- does not leak to other analyzers.
+        for _term in _ROUTINE_VOCAB:
+            self._vader.lexicon[_term] = 0.0
         self._stoplist = stoplist or []
         self.uppercase_offset = float(lexicon_cfg["uppercase_despair_offset"])
         entries = lexicon_cfg["entries"]
@@ -251,12 +279,17 @@ def compute_metrics(
     bad = [
         despair / 10,
         1 - integrity,
-        max(0.0, -baseline),
+        # Negative baseline penalizes as before; a positive baseline now earns a
+        # small bounded credit (a negative "bad", floored at -BASELINE_CREDIT_CAP)
+        # so genuinely upbeat commit tone can claw back a few points instead of
+        # being discarded. The 100 ceiling still holds (composite is clamped).
+        max(-BASELINE_CREDIT_CAP, -baseline),
         min(1.0, max(0.0, (density - 2) / 6)),
         stats.low_info_ratio,
     ]
     weights = [0.3, 0.2, 0.2, 0.2, 0.1]
     composite = 100 * (1 - sum(w * b for w, b in zip(weights, bad)))
+    composite = max(0.0, min(100.0, composite))
     make("composite_score", composite, f"{composite:.0f}")
 
     return result
@@ -265,11 +298,35 @@ def compute_metrics(
 BURDEN_WEIGHTS = {"I": 1, "II": 2, "III": 4, "IV": 6}
 BURDEN_CAP = 35
 
+# Diagnoses whose behavior is ALSO priced into a composite metric term:
+#   night_despair       <-> night_despair_index
+#   boundary_dissolution<-> boundary_integrity
+#   repeated_fix_loop   <-> fix_loop_density
+#   alexithymia         <-> alexithymia_index
+# Their burden is halved so one behavior is not billed at full weight in both the
+# quantitative table and the diagnosis list (emotional_baseline has no dedicated
+# diagnosis, so it never double-charges).
+DOUBLE_COUNTED = {"night_despair", "boundary_dissolution", "repeated_fix_loop", "alexithymia"}
+DOUBLE_COUNT_DISCOUNT = 0.5
 
-def apply_diagnosis_burden(metrics: dict[str, MetricValue], severities: list[str]) -> None:
+
+def apply_diagnosis_burden(
+    metrics: dict[str, MetricValue], diagnoses: list[tuple[str, str]]
+) -> None:
     """Final composite = max(0, metric base − diagnosis burden), per the formula
-    in symptoms.yaml: pretty metrics cannot argue with the diagnosis list."""
-    burden = min(BURDEN_CAP, sum(BURDEN_WEIGHTS[s] for s in severities))
+    in symptoms.yaml: pretty metrics cannot argue with the diagnosis list.
+
+    `diagnoses` is a list of (symptom_id, severity) pairs. A diagnosis in
+    DOUBLE_COUNTED already surfaces as a composite metric penalty, so its burden
+    is discounted to avoid charging the same commits twice.
+    """
+    burden = 0.0
+    for sid, severity in diagnoses:
+        weight = BURDEN_WEIGHTS[severity]
+        if sid in DOUBLE_COUNTED:
+            weight *= DOUBLE_COUNT_DISCOUNT
+        burden += weight
+    burden = min(BURDEN_CAP, burden)
     composite = metrics["composite_score"]
     composite.value = max(0.0, composite.value - burden)
     composite.display = f"{composite.value:.0f}"

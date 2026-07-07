@@ -32,6 +32,14 @@ from .run import NoReposError, TokenRequiredError, run_assessment
 from .waiting import run_with_rotating_messages
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from . import __version__
+
+        typer.echo(f"commit-shrink {__version__}")
+        raise typer.Exit()
+
+
 def assess(
     path: str = typer.Argument(
         ".",
@@ -51,8 +59,16 @@ def assess(
     markdown: Optional[str] = typer.Option(
         None, "--markdown", help="Also write the full report as GitHub-Flavored Markdown to this path."
     ),
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True,
+        help="Show the CommitShrink version and exit.",
+    ),
 ) -> None:
-    """Generate a developer mental-health assessment from the repo's git log."""
+    """Generate a developer mental-health assessment from the repo's git log.
+
+    Run 'commit-shrink web' to launch the interactive Streamlit web interface
+    instead of printing to the terminal.
+    """
     console = Console()
     if lang not in SUPPORTED_LANGS:
         raise typer.BadParameter(

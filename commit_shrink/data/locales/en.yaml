@@ -329,8 +329,8 @@ report_copy:
     impression: Clinical Impression
     impression_fmt: >-
       The subject committed {n} times during this period, of which {night}
-      occurred between 00:00 and 05:59. {allcaps_note}
-    allcaps_note_fmt: "All {u} all-caps commits occurred during the nocturnal window."
+      occurred between 00:00 and 05:59.{allcaps_note}
+    allcaps_note_fmt: " All {u} all-caps commits occurred during the nocturnal window."
     secondary_join: " | "        # separator between secondary diagnoses (zh uses U+FF5C)
     list_join: "; "              # joins notes / other-concerns lists (zh uses U+FF1B)
     trend_wrap_fmt: "({note})"   # wraps the composite-score trend note (zh uses U+FF08/U+FF09)
