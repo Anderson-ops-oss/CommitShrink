@@ -150,9 +150,24 @@ Requires Python 3.10+.
 ```bash
 git clone https://github.com/Anderson-ops-oss/CommitShrink.git
 cd commit-shrink
+```
+
+Then create an environment with either `venv` or `conda`:
+
+```bash
+# venv
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
+
+```bash
+# conda
+conda create -n commit_shrink python=3.12 -y
+conda activate commit_shrink
+pip install -e .
+```
+
+If you ever move or rename the project directory, re-run `pip install -e .` inside the environment — an editable install records an absolute path to the source tree, and moving the directory without reinstalling leaves it pointing at a location that no longer exists.
 
 ## Usage
 
@@ -215,8 +230,10 @@ Prefer a browser? The same assessment pipeline is also available as a Streamlit 
 
 ```bash
 pip install -e ".[web]"
-streamlit run commit_shrink/web_app.py
+commit-shrink web
 ```
+
+`commit-shrink web` launches Streamlit under the exact same Python interpreter `commit-shrink` itself is running under, so it can't pick up a mismatched `streamlit` from a different environment. Any extra arguments are forwarded to `streamlit run`, e.g. `commit-shrink web --server.port 8502`. You can still run `streamlit run commit_shrink/web_app.py` directly if you prefer — same caveat as above applies there: if you're using a `conda` env and the project directory has moved since you ran `pip install -e .`, re-run it first, or the raw `streamlit run` invocation will fail with `ModuleNotFoundError`.
 
 ## A Few Diagnostic Codes
 

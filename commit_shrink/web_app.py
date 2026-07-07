@@ -1,6 +1,6 @@
 """Streamlit shell for CommitShrink.
 
-Run with: streamlit run commit_shrink/web_app.py
+Run with: commit-shrink web  (or directly: streamlit run commit_shrink/web_app.py)
 
 An input form drives the exact same assess_repo() pipeline the CLI uses,
 with the same error handling. All display copy comes from symptoms.yaml's

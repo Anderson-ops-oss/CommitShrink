@@ -148,9 +148,24 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 ```bash
 git clone https://github.com/<your-username>/commit-shrink.git
 cd commit-shrink
+```
+
+接下来任选 `venv` 或 `conda` 创建环境：
+
+```bash
+# venv
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
+
+```bash
+# conda
+conda create -n commit_shrink python=3.12 -y
+conda activate commit_shrink
+pip install -e .
+```
+
+如果之后把项目目录挪动或重命名过，记得在对应环境里重新执行一次 `pip install -e .`——editable 安装会把源码目录的绝对路径写死记录下来，目录一动而不重装，这条记录就会指向一个不存在的路径。
 
 ## 使用方法
 
@@ -213,8 +228,10 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 
 ```bash
 pip install -e ".[web]"
-streamlit run commit_shrink/web_app.py
+commit-shrink web
 ```
+
+`commit-shrink web` 会用 `commit-shrink` 自己所在的那个 Python 解释器去拉起 Streamlit，不会去 PATH 上找一个可能对不上号的 `streamlit`。额外参数会原样转发给 `streamlit run`，例如 `commit-shrink web --server.port 8502`。也可以继续直接用 `streamlit run commit_shrink/web_app.py`——同上提示依然适用：如果用的是 `conda` 环境，且项目目录在 `pip install -e .` 之后被移动过，先重新执行一次，否则直接跑 `streamlit run` 会报 `ModuleNotFoundError`。
 
 ## 病症速览
 

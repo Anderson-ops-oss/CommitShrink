@@ -8,6 +8,7 @@ one merged timeline -- see commit_shrink/remote.py and commit_shrink/run.py.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -134,8 +135,33 @@ def _ensure_utf8_output() -> None:
             pass
 
 
+def _launch_web(extra_args: list[str]) -> None:
+    """Launch the Streamlit web interface (`commit-shrink web`).
+
+    Runs streamlit as `sys.executable -m streamlit`, i.e. under whichever
+    interpreter `commit-shrink` itself is running under, rather than
+    whatever `streamlit` a bare PATH lookup would find -- avoids the classic
+    mismatch where an activated conda/venv env isn't the one a stray
+    `streamlit` shim on PATH resolves to.
+    """
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        Console().print(
+            "[red]The web interface needs the 'web' extra.[/red] Install it with:\n"
+            '  pip install -e ".[web]"'
+        )
+        raise typer.Exit(code=1)
+    web_app_path = Path(__file__).with_name("web_app.py")
+    cmd = [sys.executable, "-m", "streamlit", "run", str(web_app_path), *extra_args]
+    raise typer.Exit(code=subprocess.run(cmd).returncode)
+
+
 def main() -> None:
     _ensure_utf8_output()
+    if len(sys.argv) > 1 and sys.argv[1] == "web":
+        _launch_web(sys.argv[2:])
+        return
     typer.run(assess)
 
 
