@@ -147,6 +147,22 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 
 Requires Python 3.10+.
 
+**Run it without installing** — assess the current repo in one command:
+
+```bash
+pipx run commit-shrink .        # or:  uvx commit-shrink .
+```
+
+**Install it:**
+
+```bash
+pip install commit-shrink
+```
+
+(`pipx run` / `uvx` and `pip install` use the PyPI release, published by [the release workflow](.github/workflows/release.yml) on each `v*` tag.)
+
+**From source** (for development):
+
 ```bash
 git clone https://github.com/Anderson-ops-oss/CommitShrink.git
 cd CommitShrink
@@ -177,7 +193,7 @@ commit-shrink path/to/repo                   # assess a specific repository
 commit-shrink . --days 30                    # widen the assessment window
 commit-shrink . --author you@example.com     # assess a specific contributor
 commit-shrink . --until 2026-06-28T23:59:00+08:00
-commit-shrink . --card card.html             # also write a shareable HTML summary card
+commit-shrink . --card card.svg              # write a shareable SVG image card (.html also works)
 
 # Assess a public repository without cloning it yourself first:
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
@@ -222,7 +238,9 @@ Run the line it prints (the `--until` value depends on today's date) — `commit
 
 ## Shareable Card
 
-`--card <path>` additionally writes a self-contained, one-page HTML "discharge summary" — a case number, your Mental Health Index gauge, the primary diagnosis, and one prescription — meant to be opened in a browser and screenshotted into a group chat. It embeds no external assets, so it renders offline. The Streamlit app shows the same card inline, with a download button.
+`--card <path>` writes a self-contained, one-page "discharge summary" — a case number, your Mental Health Index gauge, the primary diagnosis, and one prescription. The format follows the file extension: `card.svg` produces a 1200×630 **SVG image** that GitHub renders inline and that link-preview unfurlers can show, while `card.html` produces the interactive HTML card. Both embed no external assets, so they render offline; the Streamlit app shows the card inline with download buttons for either format.
+
+![CommitShrink share card](docs/card-sample.en.svg)
 
 ## Web Interface
 
@@ -234,6 +252,8 @@ commit-shrink web
 ```
 
 `commit-shrink web` launches Streamlit under the exact same Python interpreter `commit-shrink` itself is running under, so it can't pick up a mismatched `streamlit` from a different environment. Any extra arguments are forwarded to `streamlit run`, e.g. `commit-shrink web --server.port 8502`. You can still run `streamlit run commit_shrink/web_app.py` directly if you prefer — same caveat as above applies there: if you're using a `conda` env and the project directory has moved since you ran `pip install -e .`, re-run it first, or the raw `streamlit run` invocation will fail with `ModuleNotFoundError`.
+
+**Hosted demo (Streamlit Community Cloud).** To put the web app online for others to try: on [share.streamlit.io](https://share.streamlit.io) point a new app at this repo with main file `commit_shrink/web_app.py`, and add a `requirements.txt` containing `commit-shrink[web]` (or your fork) so the runtime deps install. The theme in [`.streamlit/config.toml`](.streamlit/config.toml) is picked up automatically. Note the privacy surface: a public deploy will assess any *public* repo a visitor names, and `gh-user:@me` needs a `GITHUB_TOKEN` set as a Streamlit **secret** — omit it if you don't want the hosted instance touching private repos.
 
 ## A Few Diagnostic Codes
 

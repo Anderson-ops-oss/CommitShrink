@@ -1,0 +1,54 @@
+name: Release to PyPI
+
+# Publishes to PyPI when a version tag (v*) is pushed, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# One-time setup (no API token needed -- uses OIDC "Trusted Publishing"):
+#   1. Create the project on PyPI: https://pypi.org/manage/account/publishing/
+#      Add a pending publisher -> project "commit-shrink", owner "Anderson-ops-oss",
+#      repo "CommitShrink", workflow "release.yml", environment "pypi".
+#   2. In this repo's Settings -> Environments, create an environment named "pypi".
+# After that, pushing a v* tag builds, tests, and publishes automatically.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package (with dev extras)
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -q
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Check distribution metadata
+        run: |
+          python -m pip install --upgrade twine
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC token for Trusted Publishing; no stored secret
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

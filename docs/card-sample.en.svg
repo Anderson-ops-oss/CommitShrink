@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" lang="en" aria-label="CommitShrink™ Center for Developmental Mental Health Assessment — Mental Health Index 40 / 100">
+  <defs>
+    <pattern id="hatch" width="12" height="12" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#2b2b2b"/>
+      <rect width="6" height="12" fill="#3a3a3a"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#ecece4"/>
+  <rect x="36" y="36" width="1128" height="558" fill="#cfcfc4"/>
+  <rect x="32" y="32" width="1128" height="558" fill="#fbfbf7" stroke="#cfcfc4" stroke-width="1"/>
+  <text x="596" y="78" text-anchor="middle" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="26" font-weight="700" fill="#1a1a1a"><tspan x="596" dy="0">CommitShrink™ Center for Developmental</tspan><tspan x="596" dy="32">Mental Health Assessment</tspan></text>
+  <line x1="72" y1="132" x2="1120" y2="132" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="72" y="166" font-family="'Courier New', ui-monospace, monospace" font-size="16" fill="#555">Case No. CS-2026-W26-0001</text>
+  <text x="1120" y="166" text-anchor="end" font-family="'Courier New', ui-monospace, monospace" font-size="16" fill="#555">Subject: d***v@example.com</text>
+  <text x="72" y="222" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="14" letter-spacing="2" fill="#555">MENTAL HEALTH INDEX</text>
+  <rect x="72" y="238" width="1056" height="40" fill="#e6e6dd" stroke="#b9b9ac" stroke-width="1"/>
+  <rect x="72" y="238" width="422" height="40" fill="url(#hatch)"/>
+  <text x="1112" y="266" text-anchor="end" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="22" font-weight="700" fill="#1a1a1a">40 / 100</text>
+  <text x="72" y="318" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="13" letter-spacing="1" fill="#666">PRIMARY DX</text>
+  <text x="72" y="354" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="26" font-weight="700" fill="#1a1a1a"><tspan x="72" dy="0">GIT-42.2 Compulsive Fix Disorder</tspan></text>
+  <text x="72" y="388" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="13" letter-spacing="1" fill="#666">RX</text><text x="72" y="416" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="19" font-style="italic" fill="#1a1a1a"><tspan x="72" dy="0">Exposure and Response Prevention (ERP): following the</tspan><tspan x="72" dy="26">second failed fix of the same defect, the subject is to…</tspan></text>
+  <rect x="72" y="524" width="1056" height="20" fill="url(#hatch)"/>
+  <text x="596" y="566" text-anchor="middle" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="14" fill="#555">Generate your own assessment</text>
+</svg>

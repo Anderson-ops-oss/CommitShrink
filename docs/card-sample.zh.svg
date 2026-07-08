@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" lang="zh" aria-label="CommitShrink™ 开发者心理健康评估中心 — 心理健康指数 40 / 100">
+  <defs>
+    <pattern id="hatch" width="12" height="12" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#2b2b2b"/>
+      <rect width="6" height="12" fill="#3a3a3a"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#ecece4"/>
+  <rect x="36" y="36" width="1128" height="558" fill="#cfcfc4"/>
+  <rect x="32" y="32" width="1128" height="558" fill="#fbfbf7" stroke="#cfcfc4" stroke-width="1"/>
+  <text x="596" y="78" text-anchor="middle" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="26" font-weight="700" fill="#1a1a1a"><tspan x="596" dy="0">CommitShrink™ 开发者心理健康评估中心</tspan></text>
+  <line x1="72" y1="100" x2="1120" y2="100" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="72" y="134" font-family="'Courier New', ui-monospace, monospace" font-size="16" fill="#555">病例号 CS-2026-W26-0001</text>
+  <text x="1120" y="134" text-anchor="end" font-family="'Courier New', ui-monospace, monospace" font-size="16" fill="#555">受检者: d***v@example.com</text>
+  <text x="72" y="190" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="14" letter-spacing="2" fill="#555">心理健康指数</text>
+  <rect x="72" y="206" width="1056" height="40" fill="#e6e6dd" stroke="#b9b9ac" stroke-width="1"/>
+  <rect x="72" y="206" width="422" height="40" fill="url(#hatch)"/>
+  <text x="1112" y="234" text-anchor="end" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="22" font-weight="700" fill="#1a1a1a">40 / 100</text>
+  <text x="72" y="286" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="13" letter-spacing="1" fill="#666">主诊断</text>
+  <text x="72" y="322" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="26" font-weight="700" fill="#1a1a1a"><tspan x="72" dy="0">GIT-42.2 强迫性修复障碍</tspan></text>
+  <text x="72" y="356" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="13" letter-spacing="1" fill="#666">处方</text><text x="72" y="384" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="19" font-style="italic" fill="#1a1a1a"><tspan x="72" dy="0">暴露与反应阻止（ERP）：同一问题第 2 次修复失败后，强制离</tspan><tspan x="72" dy="26">开键盘 15 分钟并饮水 200 ml（反应阻止），随后重读报错信…</tspan></text>
+  <rect x="72" y="524" width="1056" height="20" fill="url(#hatch)"/>
+  <text x="596" y="566" text-anchor="middle" font-family="Georgia, 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif', serif" font-size="14" fill="#555">生成属于你自己的评估报告</text>
+</svg>

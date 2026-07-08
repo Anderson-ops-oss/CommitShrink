@@ -1,0 +1,14 @@
+# Theme for the Streamlit web app (local `commit-shrink web` and any hosted
+# deploy), matched to the clinical "discharge summary" aesthetic of the report
+# and share card. See README for Streamlit Community Cloud deploy steps.
+
+[theme]
+base = "light"
+primaryColor = "#1a1a1a"
+backgroundColor = "#fbfbf7"
+secondaryBackgroundColor = "#ecece4"
+textColor = "#1a1a1a"
+font = "serif"
+
+[browser]
+gatherUsageStats = false

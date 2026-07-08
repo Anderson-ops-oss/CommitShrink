@@ -276,6 +276,7 @@ report_copy:
     none_dx: No condition detected this period
     footer: Generate your own assessment
     download_label: Download card
+    download_svg_label: Download share image (SVG)
     saved_fmt: "Assessment card written to {path}"
   header_labels:
     patient: Subject

@@ -28,7 +28,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
-from commit_shrink.card import build_card_model, render_card_html
+from commit_shrink.card import build_card_model, render_card_html, render_card_svg
 from commit_shrink.analyzer import collapse_cjk_whitespace
 from commit_shrink.collector import NotARepoError
 from commit_shrink.github_api import GitHubAPIError
@@ -419,11 +419,19 @@ if assessment is not None:
     # Shareable "discharge summary" card: same ReportRenderer, so it can't drift
     # from the report above. Embedded in a sandboxed iframe; also downloadable.
     st.subheader(rc["card"]["section_title"])
-    card_html = render_card_html(build_card_model(assessment, ReportRenderer(cfg)))
+    card_model = build_card_model(assessment, ReportRenderer(cfg))
+    card_html = render_card_html(card_model)
     components.html(card_html, height=520)
-    st.download_button(
+    dl_html, dl_svg = st.columns(2)
+    dl_html.download_button(
         rc["card"]["download_label"],
         data=card_html,
         file_name="commitshrink-card.html",
         mime="text/html",
+    )
+    dl_svg.download_button(
+        rc["card"]["download_svg_label"],
+        data=render_card_svg(card_model),
+        file_name="commitshrink-card.svg",
+        mime="image/svg+xml",
     )

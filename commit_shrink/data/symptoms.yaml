@@ -547,6 +547,7 @@ report_copy:
     none_dx: 本周期未检出病症
     footer: 生成属于你自己的评估报告
     download_label: 下载评估卡
+    download_svg_label: 下载分享图（SVG）
     saved_fmt: 评估卡已写入 {path}
   header_labels:
     patient: 受检者

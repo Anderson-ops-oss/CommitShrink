@@ -20,7 +20,7 @@ from rich.console import Console
 
 load_dotenv()
 
-from .card import build_card_model, render_card_html
+from .card import build_card_model, render_card_html, render_card_svg
 from .collector import NotARepoError
 from .github_api import GitHubAPIError
 from .pipeline import SUPPORTED_LANGS, NoCommitsError, load_config
@@ -54,7 +54,8 @@ def assess(
     author: Optional[str] = typer.Option(None, help="Filter commits by author (git --author)."),
     lang: str = typer.Option("en", help="Report language: 'en' or 'zh'."),
     card: Optional[str] = typer.Option(
-        None, "--card", help="Also write a shareable HTML summary card to this path."
+        None, "--card", help="Also write a shareable summary card to this path "
+        "(an SVG image if the path ends in .svg, otherwise an HTML card).",
     ),
     markdown: Optional[str] = typer.Option(
         None, "--markdown", help="Also write the full report as GitHub-Flavored Markdown to this path."
@@ -121,9 +122,9 @@ def assess(
     if result.discovered_count is not None:
         console.print(rc["aggregate_note_fmt"].format(n=result.repo_count))
     if card:
-        Path(card).write_text(
-            render_card_html(build_card_model(result.assessment, renderer)), encoding="utf-8"
-        )
+        model = build_card_model(result.assessment, renderer)
+        render_fn = render_card_svg if card.lower().endswith(".svg") else render_card_html
+        Path(card).write_text(render_fn(model), encoding="utf-8")
         console.print(rc["card"]["saved_fmt"].format(path=card))
     if markdown:
         Path(markdown).write_text(

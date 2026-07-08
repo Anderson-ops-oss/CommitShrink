@@ -145,6 +145,22 @@ collector.py  →  analyzer.py  →  diagnoser.py  →  report.py
 
 需要 Python 3.10+。
 
+**免安装直接跑** —— 一条命令评估当前仓库：
+
+```bash
+pipx run commit-shrink .        # 或：uvx commit-shrink .
+```
+
+**装到本地：**
+
+```bash
+pip install commit-shrink
+```
+
+（`pipx run` / `uvx` 和 `pip install` 用的是 PyPI 发布版，由[发布流水线](.github/workflows/release.yml)在每个 `v*` tag 上自动发布。）
+
+**从源码安装**（开发用）：
+
 ```bash
 git clone https://github.com/Anderson-ops-oss/CommitShrink.git
 cd CommitShrink
@@ -175,7 +191,7 @@ commit-shrink path/to/repo                   # 评估指定仓库
 commit-shrink . --days 30                    # 拉长评估周期
 commit-shrink . --author you@example.com     # 指定评估某一位贡献者
 commit-shrink . --until 2026-06-28T23:59:00+08:00
-commit-shrink . --card card.html             # 额外写出一张可分享的 HTML 评估卡
+commit-shrink . --card card.svg              # 写出一张可分享的 SVG 图片评估卡（.html 也支持）
 
 # 评估一个公开仓库，不用自己先手动 clone：
 commit-shrink github:torvalds/linux --author torvalds@linux-foundation.org --days 7
@@ -220,7 +236,9 @@ commit-shrink fixture-repo --days 7 --until 2026-06-28T23:59:00+08:00
 
 ## 分享卡
 
-`--card <路径>` 会额外写出一张自包含的单页 HTML"出院小结"——含病例号、心理健康指数刻度条、主诊断和一条处方，专为浏览器打开后截图发群里而设计。它不引用任何外部资源，离线也能渲染。Streamlit 网页版会内联展示同一张卡片，并附下载按钮。
+`--card <路径>` 会写出一张自包含的单页"出院小结"——含病例号、心理健康指数刻度条、主诊断和一条处方。格式由文件后缀决定：`card.svg` 生成一张 1200×630 的 **SVG 图片**（GitHub 可内联渲染，链接预览也能展开），`card.html` 则是可交互的 HTML 卡片。两者都不引用任何外部资源，离线也能渲染；Streamlit 网页版会内联展示卡片，并为两种格式各附下载按钮。
+
+![CommitShrink 分享卡](docs/card-sample.zh.svg)
 
 ## 网页版
 
@@ -232,6 +250,8 @@ commit-shrink web
 ```
 
 `commit-shrink web` 会用 `commit-shrink` 自己所在的那个 Python 解释器去拉起 Streamlit，不会去 PATH 上找一个可能对不上号的 `streamlit`。额外参数会原样转发给 `streamlit run`，例如 `commit-shrink web --server.port 8502`。也可以继续直接用 `streamlit run commit_shrink/web_app.py`——同上提示依然适用：如果用的是 `conda` 环境，且项目目录在 `pip install -e .` 之后被移动过，先重新执行一次，否则直接跑 `streamlit run` 会报 `ModuleNotFoundError`。
+
+**托管 demo（Streamlit Community Cloud）。** 想把网页版放到线上给别人试：在 [share.streamlit.io](https://share.streamlit.io) 新建应用，指向本仓库、主文件填 `commit_shrink/web_app.py`，并加一个 `requirements.txt` 写入 `commit-shrink[web]`（或你自己的 fork）以安装运行依赖。[`.streamlit/config.toml`](.streamlit/config.toml) 的主题会自动生效。注意隐私边界：公开部署会评估访问者输入的任意*公开*仓库；`gh-user:@me` 需要把 `GITHUB_TOKEN` 配成 Streamlit **secret**——不想让托管实例碰私有仓库就别配它。
 
 ## 病症速览
 
