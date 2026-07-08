@@ -317,6 +317,20 @@ st.set_page_config(page_title="CommitShrink", page_icon="🩺")
 LANGS = {"English": "en", "中文": "zh"}
 lang = LANGS[st.sidebar.radio("Language / 语言", list(LANGS), index=0)]
 
+# Optional GitHub token, entered per-session (masked, never persisted). Only
+# needed to assess your OWN private repos via gh-user:@me, or to lift the API
+# rate limit. It is passed straight to run_assessment as an argument -- never
+# written to the process environment -- so a shared hosted instance can't leak
+# one visitor's token into another's request.
+token_input = st.sidebar.text_input(
+    "GitHub token (optional)",
+    type="password",
+    value="",
+    help="Only needed for your OWN private repos (gh-user:@me), or to raise the "
+    "API rate limit. Used for this run only and never stored. On a hosted "
+    "instance, only enter a token you're willing to trust the host with.",
+)
+
 
 def _cfg_for(language: str) -> dict:
     key = f"cfg_{language}"
@@ -340,7 +354,7 @@ with st.form("assessment_form"):
         "Repository path, a public repo URL / github:owner/repo, or a whole user gh-user:owner",
         value=".",
         help="e.g.  .   •   github:torvalds/linux   •   gh-user:octocat (a user's public repos)"
-        "   •   gh-user:@me (your own public + private — needs GITHUB_TOKEN in the environment)",
+        "   •   gh-user:@me (your own public + private — needs a GitHub token: the sidebar field or GITHUB_TOKEN env)",
     )
     days_input = st.number_input("Assessment window (days)", min_value=1, value=7, step=1)
     author_input = st.text_input(
@@ -366,7 +380,8 @@ if submitted:
 
             def _work():
                 return run_assessment(
-                    path_input, days=int(days_input), until=until, author=author, cfg=cfg
+                    path_input, days=int(days_input), until=until, author=author, cfg=cfg,
+                    token=token_input.strip() or None,
                 )
 
             # st.spinner shows one fixed string; a placeholder we rewrite in a

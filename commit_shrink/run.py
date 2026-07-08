@@ -63,9 +63,15 @@ def run_assessment(
     until: datetime | None,
     author: str | None,
     cfg: dict,
+    token: str | None = None,
 ) -> RunResult:
+    """`token` lets a caller (e.g. the web form) supply a GitHub token per-call.
+    It takes precedence over the environment; when None the env is used. It is
+    passed as an argument rather than written to os.environ so a shared, multi-
+    user process (a hosted web app) can't leak one request's token into another.
+    """
     if is_user_spec(spec):
-        return _run_user(spec, days, until, author, cfg)
+        return _run_user(spec, days, until, author, cfg, token=token)
     return _run_single(spec, days, until, author, cfg)
 
 
@@ -81,11 +87,11 @@ def _run_single(spec, days, until, author, cfg) -> RunResult:
     return RunResult(assessment, trend, repo_count=1, discovered_count=None)
 
 
-def _run_user(spec, days, until, author, cfg) -> RunResult:
+def _run_user(spec, days, until, author, cfg, token=None) -> RunResult:
     username = parse_user_spec(spec)
     is_self = username == "@me"
     start, _end = compute_window(days, until)
-    token = get_token()  # env only; None when unset
+    token = token or get_token()  # explicit arg (e.g. web form) wins, else env
 
     if is_self:
         # The token owner's own repos, public AND private.

@@ -164,9 +164,13 @@ def _launch_web(extra_args: list[str]) -> None:
     try:
         import streamlit  # noqa: F401
     except ImportError:
+        # NB: escape the literal "[web]" as "\\[web]" so Rich doesn't parse it as
+        # markup and silently drop it (only [red]/[dim] here are real markup).
         Console().print(
             "[red]The web interface needs the 'web' extra.[/red] Install it with:\n"
-            '  pip install -e ".[web]"'
+            '  pip install "commit-shrink\\[web]"   [dim](from PyPI)[/dim]\n'
+            '  pip install -e ".\\[web]"            [dim](from a source checkout)[/dim]\n'
+            'or one-shot: [dim]uvx --from "commit-shrink\\[web]" commit-shrink web[/dim]'
         )
         raise typer.Exit(code=1)
     web_app_path = Path(__file__).with_name("web_app.py")
